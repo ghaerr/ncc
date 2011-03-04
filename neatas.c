@@ -57,16 +57,31 @@ static int tok_read(char *s)
 }
 
 static char tok[TOKLEN];
+static char tokc[TOKLEN];
 static int tok_next;
 
+/* next token in lower-case */
 static char *tok_get(void)
 {
-	if (!tok_next)
-		tok_read(tok);
+	char *s = tokc;
+	char *d = tok;
+	if (!tok_next) {
+		tok_read(tokc);
+		while (*s)
+			*d++ = tolower(*s++);
+		*d = '\0';
+	}
 	tok_next = 0;
 	return tok;
 }
 
+/* current token in original case */
+static char *tok_case(void)
+{
+	return tokc;
+}
+
+/* have a look at the next token */
 static char *tok_see(void)
 {
 	if (!tok_next)
@@ -458,7 +473,8 @@ static int bl(char *cmd)
 	cond = get_cond(cmd);
 	if (cond == -1)
 		cond = 14;
-	out_rel(tok_get(), OUT_REL24 | OUT_CS, cslen);
+	tok_get();
+	out_rel(tok_case(), OUT_REL24 | OUT_CS, cslen);
 	gen((cond << 28) | (5 << 25) | (l << 24) | (-2 & 0x00ffffff));
 	return 0;
 }
@@ -497,11 +513,13 @@ static int directive(char *cmd)
 static int stmt(void)
 {
 	char first[TOKLEN];
+	char first_case[TOKLEN];
 	char *s = tok_get();
 	strcpy(first, s);
+	strcpy(first_case, tok_case());
 	/* a label */
 	if (!tok_jmp(":")) {
-		out_sym(first, OUT_GLOB | OUT_CS, cslen, 0);
+		out_sym(first_case, OUT_GLOB | OUT_CS, cslen, 0);
 		return 0;
 	}
 	if (!directive(first))
