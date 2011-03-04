@@ -1,0 +1,559 @@
+/*
+ * neatas - a small arm assembler
+ *
+ * Copyright (C) 2011 Ali Gholami Rudi
+ *
+ * This program is released under GNU GPL version 2.
+ */
+#include <ctype.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include "out.h"
+
+#define BUFSIZE		(1 << 14)
+#define TOKLEN		128
+
+#define DELIMS		",:{}[]#=- \t\n/!"
+#define TOK2(a)		((a)[0] << 16 | (a)[1] << 8)
+#define TOK3(a)		((a)[0] << 16 | (a)[1] << 8 | (a)[2])
+
+static char buf[BUFSIZE];
+static int cur;
+
+static char cs[BUFSIZE];
+static int cslen;
+
+static int tok_read(char *s)
+{
+	while (1) {
+		while (isspace(buf[cur]))
+			cur++;
+		if (buf[cur] == '/' && buf[cur + 1] == '*') {
+			while (buf[cur] && (buf[cur] != '*' || buf[cur + 1] != '/'))
+				cur++;
+			continue;
+		}
+		if (buf[cur] == ';' || buf[cur] == '@') {
+			while (buf[cur] && buf[cur] != '\n')
+				cur++;
+			continue;
+		}
+		break;
+	}
+	if (!strchr(DELIMS, buf[cur])) {
+		while (!strchr(DELIMS, buf[cur]))
+			*s++ = buf[cur++];
+		*s = '\0';
+		return 0;
+	}
+	s[0] = buf[cur++];
+	s[1] = '\0';
+	return s[0] != 0;
+}
+
+static char tok[TOKLEN];
+static int tok_next;
+
+static char *tok_get(void)
+{
+	if (!tok_next)
+		tok_read(tok);
+	tok_next = 0;
+	return tok;
+}
+
+static char *tok_see(void)
+{
+	if (!tok_next)
+		tok_get();
+	tok_next = 1;
+	return tok;
+}
+
+static char *dpops[] = {
+	"and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc",
+	"tst", "teq", "cmp", "cmn", "orr", "mov", "bic", "mvn"
+};
+
+static char *conds[] = {
+	"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+	"hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
+};
+
+static char *regs[] = {
+	"a1", "a2", "a3", "a4", "v1", "v2", "v3", "v4",
+	"v5", "v6", "v7", "v8", "ip", "sp", "lr", "pc"
+};
+
+static int get_reg(char *s)
+{
+	int i;
+	if (s[0] == 'f' && s[1] == 'p')
+		return 11;
+	for (i = 0; i < 16; i++)
+		if (TOK2(s) == TOK2(regs[i]))
+			return i;
+	if (s[0] == 'r')
+		return atoi(s + 1);
+	return -1;
+}
+
+static void fill_buf(int fd)
+{
+	int len = 0;
+	int nr;
+	while ((nr = read(fd, buf + len, sizeof(buf) - len - 1)) > 0)
+		len += nr;
+	buf[len] = '\0';
+}
+
+static int tok_jmp(char *s)
+{
+	if (!strcmp(s, tok_see())) {
+		tok_get();
+		return 0;
+	}
+	return 1;
+}
+
+static void tok_expect(char *s)
+{
+	if (strcmp(s, tok_get())) {
+		fprintf(stderr, "syntax error\n");
+		exit(1);
+	}
+}
+
+static void gen(unsigned long i)
+{
+	memcpy(cs + cslen, &i, 4);
+	cslen += 4;
+}
+
+static int get_cond(char *s)
+{
+	int i;
+	if (s[0] == 'h' && s[1] == 's')
+		return 2;
+	if (s[0] == 'l' && s[1] == 'o')
+		return 3;
+	for (i = 0; i < 16; i++)
+		if (TOK2(s) == TOK2(conds[i]))
+			return i;
+	return -1;
+}
+
+static int add_op(char *s)
+{
+	int i;
+	for (i = 0; i < 16; i++)
+		if (TOK3(s) == TOK3(dpops[i]))
+			return i;
+	return -1;
+}
+
+static int shiftmode(char *s)
+{
+	if (TOK3(s) == TOK3("lsl"))
+		return 0;
+	if (TOK3(s) == TOK3("lsr"))
+		return 1;
+	if (TOK3(s) == TOK3("asr"))
+		return 2;
+	if (TOK3(s) == TOK3("ror"))
+		return 3;
+	return 0;
+}
+
+static int ldr_word(void)
+{
+	int sm = 0;
+	int rm;
+	int shifts = 0;
+	int u = 1;
+	if (tok_jmp(","))
+		return 0;
+	if (!tok_jmp("#")) {
+		u = tok_jmp("-");
+		return (u << 23) | atoi(tok_get());
+	}
+	if (!tok_jmp("-"))
+		u = 0;
+	rm = get_reg(tok_get());
+	if (!tok_jmp(",")) {
+		sm = shiftmode(tok_get());
+		tok_expect("#");
+		shifts = atoi(tok_get());
+	}
+	return (1 << 25) | (u << 23) | (shifts << 7) | (sm << 5) | rm;
+}
+
+static int ldr_half(int s, int h)
+{
+	int u, n;
+	int o = 0x90 | (s << 6) | (h << 5);
+	if (tok_jmp(","))
+		return o | (1 << 22);
+	if (!tok_jmp("#")) {
+		u = tok_jmp("-");
+		n = atoi(tok_get());
+		return o | (1 << 22) | (u << 23) | (n & 0x0f) | ((n & 0xf0) << 4);
+	}
+	u = tok_jmp("-");
+	return o | (u << 23) | get_reg(tok_get());
+}
+
+/*
+ * single data transfer:
+ * +-----------------------------------------+
+ * |COND|01|I|P|U|B|W|L| Rn | Rd |  offset   |
+ * +-----------------------------------------+
+ *
+ * I: immediate/offset
+ * P: post/pre indexing
+ * U: down/up
+ * B: byte/word
+ * W: writeback
+ * L: store/load
+ * Rn: base register
+ * Rd: source/destination register
+ *
+ * I=1 offset=|immediate|
+ * I=0 offset=| shift  | Rm |
+ *
+ * halfword and signed data transfer
+ * +----------------------------------------------+
+ * |COND|000|P|U|0|W|L| Rn | Rd |0000|1|S|H|1| Rm |
+ * +----------------------------------------------+
+ *
+ * +----------------------------------------------+
+ * |COND|000|P|U|1|W|L| Rn | Rd |off1|1|S|H|1|off2|
+ * +----------------------------------------------+
+ *
+ * S: singed
+ * H: halfword
+ */
+static int ldr(char *cmd)
+{
+	int l = 0;
+	int rd, rn;
+	int cond;
+	int w = 0;
+	int sign = 0;
+	int byte = 0;
+	int half = 0;
+	int o;
+	if (TOK3(cmd) != TOK3("ldr") && TOK3(cmd) != TOK3("str"))
+		return 1;
+	if (TOK3(cmd) == TOK3("ldr"))
+		l = 1;
+	cond = get_cond(cmd + 3);
+	cmd += cond < 0 ? 2 : 5;
+	if (cond < 0)
+		cond = 14;
+	while (*++cmd) {
+		if (*cmd == 't')
+			w = 1;
+		if (*cmd == 'b')
+			byte = 1;
+		if (*cmd == 'h')
+			half = 1;
+		if (*cmd == 's')
+			sign = 1;
+	}
+	rd = get_reg(tok_get());
+	tok_expect(",");
+	if (!tok_jmp("="))
+		return 1;
+	tok_expect("[");
+	rn = get_reg(tok_get());
+	o = (cond << 28) | (l << 20) | (rn << 16) | (rd << 12) | (half << 5) | (sign << 6);
+	if (!half && !sign)
+		o |= (1 << 26);
+	if (!tok_jmp("]")) {
+		gen(o | (w << 21) | ((half || sign) ? ldr_half(sign, half) :
+						ldr_word()));
+		return 0;
+	}
+	o |= (1 << 24) | ((half || sign) ? ldr_half(sign, half) : ldr_word());
+	tok_expect("]");
+	if (!tok_jmp("!"))
+		o |= (1 << 21);
+	gen(o);
+	return 0;
+}
+
+static int ldm_regs(void)
+{
+	int o = 0;
+	tok_expect("{");
+	while (1) {
+		int r1 = get_reg(tok_get());
+		int r2 = r1;
+		int i;
+		if (!tok_jmp("-"))
+			r2 = get_reg(tok_get());
+		for (i = r1; i <= r2; i++)
+			o |= (1 << i);
+		if (tok_jmp(","))
+			break;
+	}
+	tok_expect("}");
+	return o;
+}
+
+static int ldm_type(char *s, int l)
+{
+	int p = 0;
+	int u = 0;
+	if (*s == 'i' || *s == 'd') {
+		p = s[0] == 'i';
+		u = s[1] == 'b';
+	} else {
+		p = s[0] == (l ? 'e' : 'f');
+		u = s[1] == (l ? 'd' : 'a');
+	}
+	return (p << 24) | (u << 23);
+}
+
+/*
+ * block data transfer
+ * +----------------------------------------+
+ * |COND|100|P|U|S|W|L| Rn |    reg list    |
+ * +----------------------------------------+
+ *
+ * P: post/pre indexing
+ * U: down/up
+ * S: PSR/user bit
+ * W: write back
+ * L: load/store
+ * Rn: base register
+ */
+static int ldm(char *cmd)
+{
+	int rn;
+	int cond;
+	int l = 0, w = 0, s = 0;
+	int o = 4 << 25;
+	if (TOK3(cmd) != TOK3("ldm") && TOK3(cmd) != TOK3("stm"))
+		return 1;
+	if (TOK3(cmd) == TOK3("ldm"))
+		l = 1;
+	cond = get_cond(cmd + 3);
+	o |= ldm_type(cond < 0 ? cmd + 3 : cmd + 5, l);
+	rn = get_reg(tok_get());
+	if (!tok_jmp("!"))
+		w = 1;
+	tok_expect(",");
+	if (cond < 0)
+		cond = 14;
+	o |= ldm_regs();
+	if (!tok_jmp("^"))
+		s = 1;
+	gen(o | (cond << 28) | (s << 22) | (w << 21) | (l << 20) | (rn << 16));
+	return 0;
+}
+
+static int add_op2(void)
+{
+	int sm, rm;
+	if (!tok_jmp("#"))
+		return (1 << 25) | atoi(tok_get());
+	rm = get_reg(tok_get());
+	if (tok_jmp(","))
+		return rm;
+	sm = shiftmode(tok_get());
+	if (!tok_jmp("#"))
+		return (atoi(tok_get()) << 7) | (sm << 5);
+	return (get_reg(tok_get()) << 8) | (sm << 5) | (1 << 4) | (rm << 0);
+}
+
+/*
+ * data processing:
+ * +---------------------------------------+
+ * |COND|00|I| op |S| Rn | Rd |  operand2  |
+ * +---------------------------------------+
+ *
+ * S: set condition code
+ * Rn: first operand
+ * Rd: destination operand
+ *
+ * I=0 operand2=| shift  | Rm |
+ * I=1 operand2=|rota|  imm   |
+ */
+static int add(char *cmd)
+{
+	int op, cond;
+	int rd = 0, rn = 0;
+	int nops = 2;
+	int s = 0;
+	op = add_op(cmd);
+	if (op < 0)
+		return 1;
+	cond = get_cond(cmd + 3);
+	s = cmd[cond < 0 ? 3 : 6] == 's';
+	if (op == 13 || op == 15)
+		nops = 1;
+	if ((op & 0x0c) == 0x08)
+		s = 1;
+	if (cond < 0)
+		cond = 14;
+	if ((op & 0xc) != 0x8) {
+		rd = get_reg(tok_get());
+		tok_expect(",");
+	}
+	if (nops > 1) {
+		rn = get_reg(tok_get());
+		tok_expect(",");
+	}
+	gen((cond << 28) | (s << 20) | (op << 21) | (rn << 16) | (rd << 12) | add_op2());
+	return 0;
+}
+
+/*
+ * software interrupt:
+ * +----------------------------------+
+ * |COND|1111|                        |
+ * +----------------------------------+
+ *
+ */
+static int swi(char *cmd)
+{
+	int n;
+	int cond;
+	if (TOK3(cmd) != TOK3("swi"))
+		return 1;
+	cond = get_cond(cmd + 3);
+	if (cond == -1)
+		cond = 14;
+	tok_jmp("#");
+	n = atoi(tok_get());
+	gen((cond << 28) | (0xf << 24) | n);
+	return 0;
+}
+
+/*
+ * branch:
+ * +-----------------------------------+
+ * |COND|101|L|         offset         |
+ * +-----------------------------------+
+ *
+ * L: link
+ */
+static int bl(char *cmd)
+{
+	int l = 0;
+	int cond;
+	if (*cmd++ != 'b')
+		return 1;
+	if (*cmd == 'l') {
+		l = 1;
+		cmd++;
+	}
+	cond = get_cond(cmd);
+	if (cond == -1)
+		cond = 14;
+	out_rel(tok_get(), OUT_REL24 | OUT_CS, cslen);
+	gen((cond << 28) | (5 << 25) | (l << 24) | (-2 & 0x00ffffff));
+	return 0;
+}
+
+/*
+ * move PSR to a register
+ * +-------------------------------------+
+ * |COND|00010|P|001111| Rd |000000000000|
+ * +-------------------------------------+
+ *
+ * move a register to PSR
+ * +--------------------------------------+
+ * |COND|00|I|10|P|1010001111| source op  |
+ * +--------------------------------------+
+ *
+ * P: CPSR/SPSR_cur
+ *
+ * I=0 source=|00000000| Rm |
+ * I=1 source=|rot | imm_u8 |
+ */
+static int msr(char *cmd)
+{
+	return 1;
+}
+
+static int directive(char *cmd)
+{
+	if (cmd[0] != '.')
+		return 1;
+	if (!strcmp(".global", cmd)) {
+		tok_get();
+	}
+	return 0;
+}
+
+static int stmt(void)
+{
+	char first[TOKLEN];
+	char *s = tok_get();
+	strcpy(first, s);
+	/* a label */
+	if (!tok_jmp(":")) {
+		out_sym(first, OUT_GLOB | OUT_CS, cslen, 0);
+		return 0;
+	}
+	if (!directive(first))
+		return 0;
+	if (!add(first))
+		return 0;
+	if (!ldr(first))
+		return 0;
+	if (!ldm(first))
+		return 0;
+	if (!msr(first))
+		return 0;
+	if (!swi(first))
+		return 0;
+	if (!bl(first))
+		return 0;
+	return 1;
+}
+
+int main(int argc, char *argv[])
+{
+	char obj[128] = "";
+	char *src;
+	int ofd, ifd;
+	int i = 1;
+	while (i < argc && argv[i][0] == '-') {
+		if (argv[i][1] == 'o')
+			strcpy(obj, argv[++i]);
+		i++;
+	}
+	if (i == argc) {
+		fprintf(stderr, "neatcc: no file given\n");
+		return 1;
+	}
+	src = argv[i];
+	ifd = open(src, O_RDONLY);
+	fill_buf(ifd);
+	close(ifd);
+	out_init(0);
+	while (!stmt())
+		;
+	if (!*obj) {
+		char *s = obj;
+		strcpy(obj, src);
+		while (*s && *s != '.')
+			s++;
+		*s++ = '.';
+		*s++ = 'o';
+		*s++ = '\0';
+	}
+	ofd = open(obj, O_WRONLY | O_TRUNC | O_CREAT, 0600);
+	out_write(ofd, cs, cslen, cs, 0);
+	close(ofd);
+	return 0;
+}
