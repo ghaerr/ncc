@@ -90,6 +90,30 @@ static char *tok_see(void)
 	return tok;
 }
 
+static char *digs = "0123456789abcdef";
+
+static long num(char *s, int bits)
+{
+	int b = 10;
+	int neg = 0;
+	long n = 0;
+	if (*s == '-' || *s == '+') {
+		neg = *s == '-';
+		s++;
+	}
+	if (s[0] == '0' && s[1] == 'x') {
+		b = 16;
+		s += 2;
+	}
+	while (*s) {
+		int d = strchr(digs, *s) - digs;
+		n *= b;
+		n += d;
+		s++;
+	}
+	return (neg ? -n : n) & ((1 << bits) - 1);
+}
+
 static char *dpops[] = {
 	"and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc",
 	"tst", "teq", "cmp", "cmn", "orr", "mov", "bic", "mvn"
@@ -195,7 +219,7 @@ static int ldr_word(void)
 		return 0;
 	if (!tok_jmp("#")) {
 		u = tok_jmp("-");
-		return (u << 23) | atoi(tok_get());
+		return (u << 23) | num(tok_get(), 12);
 	}
 	if (!tok_jmp("-"))
 		u = 0;
@@ -203,7 +227,7 @@ static int ldr_word(void)
 	if (!tok_jmp(",")) {
 		sm = shiftmode(tok_get());
 		tok_expect("#");
-		shifts = atoi(tok_get());
+		shifts = num(tok_get(), 8);
 	}
 	return (1 << 25) | (u << 23) | (shifts << 7) | (sm << 5) | rm;
 }
@@ -216,7 +240,7 @@ static int ldr_half(int s, int h)
 		return o | (1 << 22);
 	if (!tok_jmp("#")) {
 		u = tok_jmp("-");
-		n = atoi(tok_get());
+		n = num(tok_get(), 8);
 		return o | (1 << 22) | (u << 23) | (n & 0x0f) | ((n & 0xf0) << 4);
 	}
 	u = tok_jmp("-");
@@ -225,9 +249,9 @@ static int ldr_half(int s, int h)
 
 /*
  * single data transfer:
- * +-----------------------------------------+
- * |COND|01|I|P|U|B|W|L| Rn | Rd |  offset   |
- * +-----------------------------------------+
+ * +------------------------------------------+
+ * |COND|01|I|P|U|B|W|L| Rn | Rd |   offset   |
+ * +------------------------------------------+
  *
  * I: immediate/offset
  * P: post/pre indexing
@@ -238,7 +262,7 @@ static int ldr_half(int s, int h)
  * Rn: base register
  * Rd: source/destination register
  *
- * I=1 offset=|immediate|
+ * I=1 offset=| immediate |
  * I=0 offset=| shift  | Rm |
  *
  * halfword and signed data transfer
@@ -378,13 +402,13 @@ static int add_op2(void)
 {
 	int sm, rm;
 	if (!tok_jmp("#"))
-		return (1 << 25) | atoi(tok_get());
+		return (1 << 25) | num(tok_get(), 8);
 	rm = get_reg(tok_get());
 	if (tok_jmp(","))
 		return rm;
 	sm = shiftmode(tok_get());
 	if (!tok_jmp("#"))
-		return (atoi(tok_get()) << 7) | (sm << 5);
+		return (num(tok_get(), 4) << 7) | (sm << 5);
 	return (get_reg(tok_get()) << 8) | (sm << 5) | (1 << 4) | (rm << 0);
 }
 
@@ -447,7 +471,7 @@ static int swi(char *cmd)
 	if (cond == -1)
 		cond = 14;
 	tok_jmp("#");
-	n = atoi(tok_get());
+	n = num(tok_get(), 24);
 	gen((cond << 28) | (0xf << 24) | n);
 	return 0;
 }
