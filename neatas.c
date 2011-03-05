@@ -18,7 +18,7 @@
 #define BUFSIZE		(1 << 14)
 #define TOKLEN		128
 
-#define DELIMS		",:{}[]#=- \t\n/!"
+#define DELIMS		",:{}[]#=- \t\n/!^"
 #define TOK2(a)		((a)[0] << 16 | (a)[1] << 8)
 #define TOK3(a)		((a)[0] << 16 | (a)[1] << 8 | (a)[2])
 
