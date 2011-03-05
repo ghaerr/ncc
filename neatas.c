@@ -28,6 +28,12 @@ static int cur;
 static char cs[BUFSIZE];
 static int cslen;
 
+static void gen(unsigned long i)
+{
+	memcpy(cs + cslen, &i, 4);
+	cslen += 4;
+}
+
 static int tok_read(char *s)
 {
 	while (1) {
@@ -111,7 +117,155 @@ static long num(char *s, int bits)
 		n += d;
 		s++;
 	}
-	return (neg ? -n : n) & ((1 << bits) - 1);
+	if (neg)
+		n = -n;
+	return bits < 32 ? n & ((1ul << bits) - 1) : n;
+}
+
+#define NLOCALS		1024
+#define NEXTERNS	1024
+#define NAMELEN		32
+
+static char locals[NLOCALS][NAMELEN];
+static char loffs[NLOCALS];
+static int nlocals;
+static char externs[NEXTERNS][NAMELEN];
+static int nexterns;
+static char globals[NEXTERNS][NAMELEN];
+static int nglobals;
+
+static void label_extern(char *name)
+{
+	int idx = nexterns++;
+	strcpy(externs[idx], name);
+}
+
+static void label_global(char *name)
+{
+	int idx = nglobals++;
+	strcpy(globals[idx], name);
+}
+
+static void label_local(char *name)
+{
+	int idx = nlocals++;
+	strcpy(locals[idx], name);
+	loffs[idx] = cslen;
+	out_sym(locals[idx], OUT_CS, loffs[idx], 0);
+}
+
+static int label_isextern(char *name)
+{
+	int i;
+	for (i = 0; i < nexterns; i++)
+		if (!strcmp(name, externs[i]))
+			return 1;
+	return 0;
+}
+
+static int label_offset(char *name)
+{
+	int i;
+	for (i = 0; i < nlocals; i++)
+		if (!strcmp(name, locals[i]))
+			return loffs[i];
+	return 0;
+}
+
+static void label_write(void)
+{
+	int i;
+	for (i = 0; i < nglobals; i++)
+		out_sym(globals[i], OUT_GLOB | OUT_CS,
+			label_offset(globals[i]), 0);
+}
+
+#define NRELOCS		1024
+
+/* absolute relocations */
+static char absns[NRELOCS][NAMELEN];	/* symbol name */
+static long absos[NRELOCS];		/* relocation location */
+static int nabs;
+/* relative relocations */
+static char relns[NRELOCS][NAMELEN];	/* symbol name */
+static long relos[NRELOCS];		/* relocation location */
+static int nrel;
+
+static void reloc_rel(char *name)
+{
+	int idx = nrel++;
+	strcpy(relns[idx], name);
+	relos[idx] = cslen;
+}
+
+static void reloc_abs(char *name)
+{
+	int idx = nabs++;
+	strcpy(absns[idx], name);
+	absos[idx] = cslen;
+}
+
+#define CSBEG_NAME		"__neatas_cs"
+
+static void reloc_write(void)
+{
+	int i;
+	out_sym(CSBEG_NAME, OUT_CS, 0, 0);
+	for (i = 0; i < nabs; i++) {
+		if (label_isextern(absns[i])) {
+			out_rel(absns[i], OUT_CS, absos[i]);
+		} else {
+			long off = label_offset(absns[i]);
+			out_rel(CSBEG_NAME, OUT_CS, absos[i]);
+			*(long *) (cs + absos[i]) += off;
+		}
+	}
+	for (i = 0; i < nrel; i++) {
+		if (label_isextern(relns[i])) {
+			out_rel(relns[i], OUT_CS | OUT_REL24, relos[i]);
+		} else {
+			long off = ((label_offset(relns[i]) - relos[i]) >> 2);
+			long *dst = (void *) cs + relos[i];
+			*dst = (*dst & 0xff000000) | ((*dst + off) & 0x00ffffff);
+		}
+	}
+}
+
+#define NDATS		1024
+
+/* data pool */
+static long dat_offs[NDATS];		/* data immediate value */
+static long dat_locs[NDATS];		/* address of pointing ldr */
+static char dat_names[NDATS][NAMELEN];	/* relocation data symbol name */
+static int ndats;
+
+static void pool_num(long num)
+{
+	int idx = ndats++;
+	dat_offs[idx] = num;
+	dat_locs[idx] = cslen;
+}
+
+static void pool_reloc(char *name, long off)
+{
+	int idx = ndats++;
+	dat_offs[idx] = off;
+	dat_locs[idx] = cslen;
+	strcpy(dat_names[idx], name);
+}
+
+static void pool_write(void)
+{
+	int i;
+	for (i = 0; i < ndats; i++) {
+		if (dat_names[i]) {
+			long *loc = (void *) cs + dat_locs[i];
+			reloc_abs(dat_names[i]);
+			*loc = (*loc & 0xfffff000) |
+				((*loc + (cslen - dat_locs[i] - 8)) & 0x00000fff);
+		}
+		gen(dat_offs[i]);
+	}
 }
 
 static char *dpops[] = {
@@ -166,12 +320,6 @@ static void tok_expect(char *s)
 		fprintf(stderr, "syntax error\n");
 		exit(1);
 	}
-}
-
-static void gen(unsigned long i)
-{
-	memcpy(cs + cslen, &i, 4);
-	cslen += 4;
 }
 
 static int get_cond(char *s)
@@ -307,13 +455,19 @@ static int ldr(char *cmd)
 	}
 	rd = get_reg(tok_get());
 	tok_expect(",");
-	if (!tok_jmp("="))
-		return 1;
-	tok_expect("[");
-	rn = get_reg(tok_get());
-	o = (cond << 28) | (l << 20) | (rn << 16) | (rd << 12) | (half << 5) | (sign << 6);
+	o = (cond << 28) | (l << 20) | (rd << 12) | (half << 5) | (sign << 6);
 	if (!half && !sign)
 		o |= (1 << 26);
+	if (tok_jmp("[")) {
+		rn = 15;
+		tok_expect("=");
+		tok_get();
+		pool_reloc(tok_case(), 0);
+		gen(o | (1 << 26) | (1 << 23) | (1 << 24) | (rn << 16));
+		return 0;
+	}
+	rn = get_reg(tok_get());
+	o |= (rn << 16);
 	if (!tok_jmp("]")) {
 		gen(o | (w << 21) | ((half || sign) ? ldr_half(sign, half) :
 						ldr_word()));
@@ -498,7 +652,7 @@ static int bl(char *cmd)
 	if (cond == -1)
 		cond = 14;
 	tok_get();
-	out_rel(tok_case(), OUT_REL24 | OUT_CS, cslen);
+	reloc_rel(tok_case());
 	gen((cond << 28) | (5 << 25) | (l << 24) | (-2 & 0x00ffffff));
 	return 0;
 }
@@ -528,8 +682,18 @@ static int directive(char *cmd)
 {
 	if (cmd[0] != '.')
 		return 1;
+	if (!strcmp(".extern", cmd)) {
+		tok_get();
+		label_extern(tok_case());
+	}
 	if (!strcmp(".global", cmd)) {
 		tok_get();
+		label_global(tok_case());
+	}
+	if (!strcmp(".word", cmd)) {
+		do {
+			gen(num(tok_get(), 31));
+		} while (!tok_jmp(","));
 	}
 	return 0;
 }
@@ -543,7 +707,7 @@ static int stmt(void)
 	strcpy(first_case, tok_case());
 	/* a label */
 	if (!tok_jmp(":")) {
-		out_sym(first_case, OUT_GLOB | OUT_CS, cslen, 0);
+		label_local(first_case);
 		return 0;
 	}
 	if (!directive(first))
@@ -585,6 +749,9 @@ int main(int argc, char *argv[])
 	out_init(0);
 	while (!stmt())
 		;
+	label_write();
+	pool_write();
+	reloc_write();
 	if (!*obj) {
 		char *s = obj;
 		strcpy(obj, src);
