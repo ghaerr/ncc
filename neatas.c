@@ -706,7 +706,13 @@ static int directive(char *cmd)
 	}
 	if (!strcmp(".word", cmd)) {
 		do {
-			gen(num(tok_get(), 31));
+			if (!tok_jmp("=")) {
+				tok_get();
+				reloc_abs(tok_case());
+				gen(0);
+			} else {
+				gen(num(tok_get(), 32));
+			}
 		} while (!tok_jmp(","));
 	}
 	return 0;
