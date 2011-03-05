@@ -189,13 +189,15 @@ static int nabs;
 /* relative relocations */
 static char relns[NRELOCS][NAMELEN];	/* symbol name */
 static long relos[NRELOCS];		/* relocation location */
+static long relbs[NRELOCS];		/* relocation bits: 12=ldr, 24=bl */
 static int nrel;
 
-static void reloc_rel(char *name)
+static void reloc_rel(char *name, int bits)
 {
 	int idx = nrel++;
 	strcpy(relns[idx], name);
 	relos[idx] = cslen;
+	relbs[idx] = bits;
 }
 
 static void reloc_abs(char *name)
@@ -221,6 +223,14 @@ static void reloc_write(void)
 		}
 	}
 	for (i = 0; i < nrel; i++) {
+		/* ldr instruction */
+		if (relbs[i] == 12) {
+			long off = label_offset(relns[i]) - relos[i] - 8;
+			long *dst = (void *) cs + relos[i];
+			*dst = (*dst & 0xfffff000) | ((*dst + off) & 0x00000fff);
+			continue;
+		}
+		/* bl instruction */
 		if (label_isextern(relns[i])) {
 			out_rel(relns[i], OUT_CS | OUT_REL24, relos[i]);
 		} else {
@@ -460,9 +470,13 @@ static int ldr(char *cmd)
 		o |= (1 << 26);
 	if (tok_jmp("[")) {
 		rn = 15;
-		tok_expect("=");
-		tok_get();
-		pool_reloc(tok_case(), 0);
+		if (!tok_jmp("=")) {
+			tok_get();
+			pool_reloc(tok_case(), 0);
+		} else {
+			tok_get();
+			reloc_rel(tok_case(), 12);
+		}
 		gen(o | (1 << 26) | (1 << 23) | (1 << 24) | (rn << 16));
 		return 0;
 	}
@@ -652,7 +666,7 @@ static int bl(char *cmd)
 	if (cond == -1)
 		cond = 14;
 	tok_get();
-	reloc_rel(tok_case());
+	reloc_rel(tok_case(), 24);
 	gen((cond << 28) | (5 << 25) | (l << 24) | (-2 & 0x00ffffff));
 	return 0;
 }
