@@ -189,7 +189,7 @@ static int nabs;
 /* relative relocations */
 static char relns[NRELOCS][NAMELEN];	/* symbol name */
 static long relos[NRELOCS];		/* relocation location */
-static long relbs[NRELOCS];		/* relocation bits: 12=ldr, 24=bl */
+static long relbs[NRELOCS];		/* relocation bits: ldrh=8, 12=ldr, 24=bl */
 static int nrel;
 
 static void reloc_rel(char *name, int bits)
@@ -223,21 +223,31 @@ static void reloc_write(void)
 		}
 	}
 	for (i = 0; i < nrel; i++) {
-		/* ldr instruction */
-		if (relbs[i] == 12) {
-			long off = label_offset(relns[i]) - relos[i] - 8;
-			long *dst = (void *) cs + relos[i];
-			*dst = (*dst & 0xfffff000) | ((*dst + off) & 0x00000fff);
-			continue;
-		}
-		/* bl instruction */
+		long *dst = (void *) cs + relos[i];
+		long off;
 		if (label_isextern(relns[i])) {
 			out_rel(relns[i], OUT_CS | OUT_REL24, relos[i]);
-		} else {
-			long off = ((label_offset(relns[i]) - relos[i]) >> 2);
-			long *dst = (void *) cs + relos[i];
-			*dst = (*dst & 0xff000000) | ((*dst + off) & 0x00ffffff);
+			continue;
 		}
+		off = label_offset(relns[i]) - relos[i] - 8;
+		/* bl instruction */
+		if (relbs[i] == 24) {
+			off = (off + 8) >> 2;
+			*dst = (*dst & 0xff000000) | ((*dst + off) & 0x00ffffff);
+			continue;
+		}
+		/* set u-bit for negative offsets */
+		if (off < 0) {
+			*dst ^= (1 << 23);
+			off = -off;
+		}
+		/* ldr instruction */
+		if (relbs[i] == 12)
+			*dst = (*dst & 0xfffff000) | ((*dst + off) & 0x00000fff);
+		/* ldrh instruction */
+		if (relbs[i] == 8)
+			*dst = (*dst & 0xfffff0f0) |
+				(off & 0x0f) | ((off & 0xf0) << 4);
 	}
 }
 
@@ -270,9 +280,14 @@ static void pool_write(void)
 	for (i = 0; i < ndats; i++) {
 		if (dat_names[i]) {
 			long *loc = (void *) cs + dat_locs[i];
+			int off = cslen - dat_locs[i] - 8;
 			reloc_abs(dat_names[i]);
-			*loc = (*loc & 0xfffff000) |
-				((*loc + (cslen - dat_locs[i] - 8)) & 0x00000fff);
+			/* ldrh needs special care */
+			if (*loc & (1 << 26))
+				*loc = (*loc & 0xfffff000) | (off & 0x00000fff);
+			else
+				*loc = (*loc & 0xfffff0f0) | (off & 0x0f) |
+					((off & 0xf0) << 4);
 		}
 		gen(dat_offs[i]);
 	}
@@ -466,7 +481,9 @@ static int ldr(char *cmd)
 	rd = get_reg(tok_get());
 	tok_expect(",");
 	o = (cond << 28) | (l << 20) | (rd << 12) | (half << 5) | (sign << 6);
-	if (!half && !sign)
+	if (half || sign)
+		o |= 0x90;
+	else
 		o |= (1 << 26);
 	if (tok_jmp("[")) {
 		rn = 15;
@@ -475,9 +492,13 @@ static int ldr(char *cmd)
 			pool_reloc(tok_case(), 0);
 		} else {
 			tok_get();
-			reloc_rel(tok_case(), 12);
+			reloc_rel(tok_case(), (half || sign) ? 8 : 12);
 		}
-		gen(o | (1 << 26) | (1 << 23) | (1 << 24) | (rn << 16));
+		if (half || sign)
+			o |= (1 << 22);
+		else
+			o |= (1 << 26);
+		gen(o | (1 << 23) | (1 << 24) | (rn << 16));
 		return 0;
 	}
 	rn = get_reg(tok_get());
