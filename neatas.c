@@ -18,7 +18,7 @@
 #define BUFSIZE		(1 << 14)
 #define TOKLEN		128
 
-#define DELIMS		",:{}[]#=- \t\n/!^"
+#define DELIMS		",:{}[]#=-+ \t\n/!^"
 #define TOK2(a)		((a)[0] << 16 | (a)[1] << 8)
 #define TOK3(a)		((a)[0] << 16 | (a)[1] << 8 | (a)[2])
 
@@ -81,9 +81,10 @@ static char *tok_get(void)
 	return tok;
 }
 
-/* current token in original case */
+/* next token in original case */
 static char *tok_case(void)
 {
+	tok_get();
 	return tokc;
 }
 
@@ -189,14 +190,16 @@ static int nabs;
 /* relative relocations */
 static char relns[NRELOCS][NAMELEN];	/* symbol name */
 static long relos[NRELOCS];		/* relocation location */
+static long relas[NRELOCS];		/* relocation addend */
 static long relbs[NRELOCS];		/* relocation bits: ldrh=8, 12=ldr, 24=bl */
 static int nrel;
 
-static void reloc_rel(char *name, int bits)
+static void reloc_rel(char *name, long off, int bits)
 {
 	int idx = nrel++;
 	strcpy(relns[idx], name);
 	relos[idx] = cslen;
+	relas[idx] = off;
 	relbs[idx] = bits;
 }
 
@@ -208,6 +211,28 @@ static void reloc_abs(char *name)
 }
 
 #define CSBEG_NAME		"__neatas_cs"
+
+/* fill immediate value for bl instruction */
+static void bl_imm(long *dst, long imm)
+{
+	imm = ((*dst << 2) + imm) >> 2;
+	*dst = (*dst & 0xff000000) | (imm & 0x00ffffff);
+}
+
+/* fill immediate value for ldr instruction */
+static void ldr_imm(long *dst, long imm, int half)
+{
+	/* set u-bit for negative offsets */
+	if (imm < 0) {
+		*dst ^= (1 << 23);
+		imm = -imm;
+	}
+	if (!half)
+		*dst = (*dst & 0xfffff000) | ((*dst + imm) & 0x00000fff);
+	if (half)
+		*dst = (*dst & 0xfffff0f0) |
+				(imm & 0x0f) | ((imm & 0xf0) << 4);
+}
 
 static void reloc_write(void)
 {
@@ -227,27 +252,15 @@ static void reloc_write(void)
 		long off;
 		if (label_isextern(relns[i])) {
 			out_rel(relns[i], OUT_CS | OUT_REL24, relos[i]);
+			bl_imm(dst, relas[i] - 8);
 			continue;
 		}
-		off = label_offset(relns[i]) - relos[i] - 8;
+		off = relas[i] + label_offset(relns[i]) - relos[i] - 8;
 		/* bl instruction */
-		if (relbs[i] == 24) {
-			off = (off + 8) >> 2;
-			*dst = (*dst & 0xff000000) | ((*dst + off) & 0x00ffffff);
-			continue;
-		}
-		/* set u-bit for negative offsets */
-		if (off < 0) {
-			*dst ^= (1 << 23);
-			off = -off;
-		}
-		/* ldr instruction */
-		if (relbs[i] == 12)
-			*dst = (*dst & 0xfffff000) | ((*dst + off) & 0x00000fff);
-		/* ldrh instruction */
-		if (relbs[i] == 8)
-			*dst = (*dst & 0xfffff0f0) |
-				(off & 0x0f) | ((off & 0xf0) << 4);
+		if (relbs[i] == 24)
+			bl_imm(dst, off);
+		else
+			ldr_imm(dst, off, relbs[i] == 8);
 	}
 }
 
@@ -420,6 +433,23 @@ static int ldr_half(int s, int h)
 	return o | (u << 23) | get_reg(tok_get());
 }
 
+static long ldr_off(void)
+{
+	long off = 0;
+	while (1) {
+		if (!tok_jmp("-")) {
+			off -= num(tok_get(), 32);
+			continue;
+		}
+		if (!tok_jmp("+")) {
+			off += num(tok_get(), 32);
+			continue;
+		}
+		break;
+	}
+	return off;
+}
+
 /*
  * single data transfer:
  * +------------------------------------------+
@@ -486,13 +516,14 @@ static int ldr(char *cmd)
 	else
 		o |= (1 << 26);
 	if (tok_jmp("[")) {
+		char sym[NAMELEN];
 		rn = 15;
 		if (!tok_jmp("=")) {
-			tok_get();
-			pool_reloc(tok_case(), 0);
+			strcpy(sym, tok_case());
+			pool_reloc(sym, ldr_off());
 		} else {
-			tok_get();
-			reloc_rel(tok_case(), (half || sign) ? 8 : 12);
+			strcpy(sym, tok_case());
+			reloc_rel(sym, ldr_off(), (half || sign) ? 8 : 12);
 		}
 		if (half || sign)
 			o |= (1 << 22);
@@ -677,6 +708,7 @@ static int bl(char *cmd)
 {
 	int l = 0;
 	int cond;
+	char sym[NAMELEN];
 	if (*cmd++ != 'b')
 		return 1;
 	if (*cmd == 'l') {
@@ -686,9 +718,9 @@ static int bl(char *cmd)
 	cond = get_cond(cmd);
 	if (cond == -1)
 		cond = 14;
-	tok_get();
-	reloc_rel(tok_case(), 24);
-	gen((cond << 28) | (5 << 25) | (l << 24) | (-2 & 0x00ffffff));
+	strcpy(sym, tok_case());
+	reloc_rel(sym, ldr_off(), 24);
+	gen((cond << 28) | (5 << 25) | (l << 24));
 	return 0;
 }
 
@@ -718,19 +750,16 @@ static int directive(char *cmd)
 	if (cmd[0] != '.')
 		return 1;
 	if (!strcmp(".extern", cmd)) {
-		tok_get();
 		label_extern(tok_case());
 	}
 	if (!strcmp(".global", cmd)) {
-		tok_get();
 		label_global(tok_case());
 	}
 	if (!strcmp(".word", cmd)) {
 		do {
 			if (!tok_jmp("=")) {
-				tok_get();
 				reloc_abs(tok_case());
-				gen(0);
+				gen(ldr_off());
 			} else {
 				gen(num(tok_get(), 32));
 			}
@@ -743,8 +772,7 @@ static int stmt(void)
 {
 	char first[TOKLEN];
 	char first_case[TOKLEN];
-	char *s = tok_get();
-	strcpy(first, s);
+	strcpy(first, tok_see());
 	strcpy(first_case, tok_case());
 	/* a label */
 	if (!tok_jmp(":")) {
