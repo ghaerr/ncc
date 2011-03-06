@@ -675,6 +675,47 @@ static int add(char *cmd)
 }
 
 /*
+ * multiply
+ * +----------------------------------------+
+ * |COND|000000|A|S| Rd | Rn | Rs |1001| Rm |
+ * +----------------------------------------+
+ *
+ * Rd: destination
+ * A: accumulate
+ * C: set condition codes
+ *
+ * I=0 operand2=| shift  | Rm |
+ * I=1 operand2=|rota|  imm   |
+ */
+static int mul(char *cmd)
+{
+	int cond;
+	int rd, rm, rs, rn = 0;
+	int s = 0;
+	int a = 0;
+	if (TOK3(cmd) != TOK3("mul") && TOK3(cmd) != TOK3("mla"))
+		return 1;
+	if (TOK3(cmd) == TOK3("mla"))
+		a = 1;
+	cond = get_cond(cmd + 3);
+	s = cmd[cond < 0 ? 3 : 6] == 's';
+	if (cond < 0)
+		cond = 14;
+	rd = get_reg(tok_get());
+	tok_expect(",");
+	rm = get_reg(tok_get());
+	tok_expect(",");
+	rs = get_reg(tok_get());
+	if (a) {
+		tok_expect(",");
+		rn = get_reg(tok_get());
+	}
+	gen((cond << 28) | (a << 21) | (s << 20) | (rd << 16) |
+		(rn << 12) | (rs << 8) | (9 << 4) | (rm << 0));
+	return 0;
+}
+
+/*
  * software interrupt:
  * +----------------------------------+
  * |COND|1111|                        |
@@ -782,6 +823,8 @@ static int stmt(void)
 	if (!directive(first))
 		return 0;
 	if (!add(first))
+		return 0;
+	if (!mul(first))
 		return 0;
 	if (!ldr(first))
 		return 0;
