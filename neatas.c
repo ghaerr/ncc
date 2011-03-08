@@ -618,11 +618,19 @@ static int ldm(char *cmd)
 	return 0;
 }
 
+static int add_encimm(unsigned n)
+{
+	int i = 0;
+	while (i < 12 && (n >> ((4 + i) << 1)))
+		i++;
+	return (n >> (i << 1)) | (((16 - i) & 0x0f) << 8);
+}
+
 static int add_op2(void)
 {
 	int sm, rm;
 	if (!tok_jmp("#"))
-		return (1 << 25) | num(tok_get(), 8);
+		return (1 << 25) | add_encimm(num(tok_get(), 32));
 	rm = get_reg(tok_get());
 	if (tok_jmp(","))
 		return rm;
