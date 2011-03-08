@@ -47,14 +47,12 @@ static int sym_find(char *name)
 
 static Elf32_Sym *put_sym(char *name)
 {
-	int found = name ? sym_find(name) : -1;
+	int found = sym_find(name);
 	Elf32_Sym *sym = found != -1 ? &syms[found] : &syms[nsyms++];
 	if (found >= 0)
 		return sym;
-	if (name) {
-		sym->st_name = nsymstr;
-		nsymstr = putstr(symstr + nsymstr, name) - symstr;
-	}
+	sym->st_name = nsymstr;
+	nsymstr = putstr(symstr + nsymstr, name) - symstr;
 	sym->st_shndx = SHN_UNDEF;
 	sym->st_info = ELF32_ST_INFO(STB_GLOBAL, STT_FUNC);
 	return sym;
