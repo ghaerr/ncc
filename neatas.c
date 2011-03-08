@@ -628,7 +628,7 @@ static int add_op2(void)
 		return rm;
 	sm = shiftmode(tok_get());
 	if (!tok_jmp("#"))
-		return (num(tok_get(), 4) << 7) | (sm << 5);
+		return (num(tok_get(), 4) << 7) | (sm << 5) | (rm << 0);
 	return (get_reg(tok_get()) << 8) | (sm << 5) | (1 << 4) | (rm << 0);
 }
 
