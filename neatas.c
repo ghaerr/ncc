@@ -22,6 +22,7 @@
 #define TOK2(a)		((a)[0] << 16 | (a)[1] << 8)
 #define TOK3(a)		((a)[0] << 16 | (a)[1] << 8 | (a)[2])
 
+static char src[256];
 static char buf[BUFSIZE];
 static int cur;
 
@@ -355,7 +356,12 @@ static int tok_jmp(char *s)
 static void tok_expect(char *s)
 {
 	if (strcmp(s, tok_get())) {
-		fprintf(stderr, "syntax error\n");
+		int lineno = 1;
+		int i;
+		for (i = 0; i < cur; i++)
+			if (buf[i] == '\n')
+				lineno++;
+		fprintf(stderr, "%s:%d: syntax error\n", src, lineno);
 		exit(1);
 	}
 }
@@ -850,7 +856,6 @@ static int stmt(void)
 int main(int argc, char *argv[])
 {
 	char obj[128] = "";
-	char *src;
 	int ofd, ifd;
 	int i = 1;
 	while (i < argc && argv[i][0] == '-') {
@@ -862,7 +867,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "neatcc: no file given\n");
 		return 1;
 	}
-	src = argv[i];
+	strcpy(src, argv[i]);
 	ifd = open(src, O_RDONLY);
 	fill_buf(ifd);
 	close(ifd);
