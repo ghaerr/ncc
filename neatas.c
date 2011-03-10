@@ -307,6 +307,17 @@ static void pool_write(void)
 	}
 }
 
+static void die(char *msg)
+{
+	int lineno = 1;
+	int i;
+	for (i = 0; i < cur; i++)
+		if (buf[i] == '\n')
+			lineno++;
+	fprintf(stderr, "%s:%d: %s\n", src, lineno, msg);
+	exit(1);
+}
+
 static char *dpops[] = {
 	"and", "eor", "sub", "rsb", "add", "adc", "sbc", "rsc",
 	"tst", "teq", "cmp", "cmn", "orr", "mov", "bic", "mvn"
@@ -332,7 +343,7 @@ static int get_reg(char *s)
 			return i;
 	if (s[0] == 'r')
 		return atoi(s + 1);
-	return -1;
+	die("unknown register");
 }
 
 static void fill_buf(int fd)
@@ -351,17 +362,6 @@ static int tok_jmp(char *s)
 		return 0;
 	}
 	return 1;
-}
-
-static void die(char *msg)
-{
-	int lineno = 1;
-	int i;
-	for (i = 0; i < cur; i++)
-		if (buf[i] == '\n')
-			lineno++;
-	fprintf(stderr, "%s:%d: %s\n", src, lineno, msg);
-	exit(1);
 }
 
 static void tok_expect(char *s)
