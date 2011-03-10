@@ -514,7 +514,7 @@ static int ldr(char *cmd)
 	if (half || sign)
 		o |= 0x90;
 	else
-		o |= (1 << 26);
+		o |= (1 << 26) | (byte << 22);
 	if (tok_jmp("[")) {
 		char sym[NAMELEN];
 		rn = 15;
