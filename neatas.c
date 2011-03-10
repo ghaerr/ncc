@@ -475,8 +475,8 @@ static long ldr_off(void)
  * Rn: base register
  * Rd: source/destination register
  *
- * I=1 offset=| immediate |
- * I=0 offset=| shift  | Rm |
+ * I=0 offset=| immediate |
+ * I=1 offset=| shift  | Rm |
  *
  * halfword and signed data transfer
  * +----------------------------------------------+
@@ -711,7 +711,7 @@ static int add(char *cmd)
  *
  * Rd: destination
  * A: accumulate
- * C: set condition codes
+ * S: set condition codes
  *
  * I=0 operand2=| shift  | Rm |
  * I=1 operand2=|rota|  imm   |
