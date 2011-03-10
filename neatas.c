@@ -353,17 +353,21 @@ static int tok_jmp(char *s)
 	return 1;
 }
 
+static void die(char *msg)
+{
+	int lineno = 1;
+	int i;
+	for (i = 0; i < cur; i++)
+		if (buf[i] == '\n')
+			lineno++;
+	fprintf(stderr, "%s:%d: %s\n", src, lineno, msg);
+	exit(1);
+}
+
 static void tok_expect(char *s)
 {
-	if (strcmp(s, tok_get())) {
-		int lineno = 1;
-		int i;
-		for (i = 0; i < cur; i++)
-			if (buf[i] == '\n')
-				lineno++;
-		fprintf(stderr, "%s:%d: syntax error\n", src, lineno);
-		exit(1);
-	}
+	if (strcmp(s, tok_get()))
+		die("syntax error");
 }
 
 static int get_cond(char *s)
@@ -632,11 +636,22 @@ static int add_encimm(unsigned n)
 	return (n >> (i << 1)) | (((16 - i) & 0x0f) << 8);
 }
 
+static long add_decimm(unsigned n)
+{
+	int rot = (16 - ((n >> 8) & 0x0f)) & 0x0f;
+	return (n & 0xff) << (rot << 1);
+}
+
 static int add_op2(void)
 {
 	int sm, rm;
-	if (!tok_jmp("#"))
-		return (1 << 25) | add_encimm(num(tok_get(), 32));
+	if (!tok_jmp("#")) {
+		long n = num(tok_get(), 32);
+		long imm = add_encimm(n);
+		if (add_decimm(imm) != n)
+			die("cannot encode immediate");
+		return (1 << 25) | imm;
+	}
 	rm = get_reg(tok_get());
 	if (tok_jmp(","))
 		return rm;
