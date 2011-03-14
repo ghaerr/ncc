@@ -124,13 +124,14 @@ static long num(char *s, int bits)
 	return bits < 32 ? n & ((1ul << bits) - 1) : n;
 }
 
-#define NLOCALS		1024
+#define NLABELS		1024
 #define NEXTERNS	1024
 #define NAMELEN		32
+#define LOCALLABEL(s)	((s)[0] == '.' || (s)[0] >= '0' && (s)[0] <= '9')
 
-static char locals[NLOCALS][NAMELEN];
-static int loffs[NLOCALS];
-static int nlocals;
+static char labels[NLABELS][NAMELEN];
+static int loffs[NLABELS];
+static int nlabels;
 static char externs[NEXTERNS][NAMELEN];
 static int nexterns;
 static char globals[NEXTERNS][NAMELEN];
@@ -148,12 +149,20 @@ static void label_global(char *name)
 	strcpy(globals[idx], name);
 }
 
-static void label_local(char *name)
+static void label_def(char *name)
 {
-	int idx = nlocals++;
-	strcpy(locals[idx], name);
+	int idx = nlabels++;
+	strcpy(labels[idx], name);
 	loffs[idx] = cslen;
-	out_sym(locals[idx], OUT_CS, loffs[idx], 0);
+}
+
+static int label_isglobal(char *name)
+{
+	int i;
+	for (i = 0; i < nglobals; i++)
+		if (!strcmp(name, globals[i]))
+			return 1;
+	return 0;
 }
 
 static int label_isextern(char *name)
@@ -168,18 +177,40 @@ static int label_isextern(char *name)
 static int label_offset(char *name)
 {
 	int i;
-	for (i = 0; i < nlocals; i++)
-		if (!strcmp(name, locals[i]))
+	for (i = 0; i < nlabels; i++)
+		if (!strcmp(name, labels[i]))
 			return loffs[i];
 	return 0;
+}
+
+static int label_find(char *name, int coff)
+{
+	int i;
+	int off = -1;
+	if (!LOCALLABEL(name))
+		return label_offset(name);
+	for (i = 0; i < nlabels; i++) {
+		if (loffs[i] < coff && label_isglobal(labels[i]))
+			off = -1;
+		if (!strcmp(name, labels[i]))
+			off = loffs[i];
+		if (loffs[i] > coff && label_isglobal(labels[i]))
+			break;
+	}
+	return off;
 }
 
 static void label_write(void)
 {
 	int i;
-	for (i = 0; i < nglobals; i++)
-		out_sym(globals[i], OUT_GLOB | OUT_CS,
-			label_offset(globals[i]), 0);
+	for (i = 0; i < nlabels; i++) {
+		if (!LOCALLABEL(labels[i])) {
+			int flags = OUT_CS;
+			if (label_isglobal(labels[i]))
+				flags |= OUT_GLOB;
+			out_sym(labels[i], flags, label_offset(labels[i]), 0);
+		}
+	}
 }
 
 #define NRELOCS		1024
@@ -240,10 +271,10 @@ static void reloc_write(void)
 	int i;
 	out_sym(CSBEG_NAME, OUT_CS, 0, 0);
 	for (i = 0; i < nabs; i++) {
-		if (label_isextern(absns[i])) {
+		if (label_isextern(absns[i]) || label_isglobal(absns[i])) {
 			out_rel(absns[i], OUT_CS, absos[i]);
 		} else {
-			long off = label_offset(absns[i]);
+			long off = label_find(absns[i], absos[i]);
 			out_rel(CSBEG_NAME, OUT_CS, absos[i]);
 			*(long *) (cs + absos[i]) += off;
 		}
@@ -256,7 +287,7 @@ static void reloc_write(void)
 			bl_imm(dst, relas[i] - 8);
 			continue;
 		}
-		off = relas[i] + label_offset(relns[i]) - relos[i] - 8;
+		off = relas[i] + label_find(relns[i], relos[i]) - relos[i] - 8;
 		/* bl instruction */
 		if (relbs[i] == 24)
 			bl_imm(dst, off);
@@ -846,7 +877,7 @@ static int stmt(void)
 	strcpy(first_case, tok_case());
 	/* a label */
 	if (!tok_jmp(":")) {
-		label_local(first_case);
+		label_def(first_case);
 		return 0;
 	}
 	if (!directive(first))
