@@ -129,7 +129,7 @@ static long num(char *s, int bits)
 #define NAMELEN		32
 
 static char locals[NLOCALS][NAMELEN];
-static char loffs[NLOCALS];
+static int loffs[NLOCALS];
 static int nlocals;
 static char externs[NEXTERNS][NAMELEN];
 static int nexterns;
