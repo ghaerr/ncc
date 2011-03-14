@@ -812,7 +812,7 @@ static int bl(char *cmd)
 	char sym[NAMELEN];
 	if (*cmd++ != 'b')
 		return 1;
-	if (*cmd == 'l') {
+	if (*cmd == 'l' && (cmd[1] != 'e' || cmd[2] == 'q')) {
 		l = 1;
 		cmd++;
 	}
