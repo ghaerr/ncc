@@ -840,18 +840,265 @@ static int bl(char *cmd)
  * +-------------------------------------+
  *
  * move a register to PSR
- * +--------------------------------------+
- * |COND|00|I|10|P|1010001111| source op  |
- * +--------------------------------------+
+ * +----------------------------------------+
+ * |COND|00|I|10|P|10| FM |1111| source op  |
+ * +----------------------------------------+
  *
  * P: CPSR/SPSR_cur
+ * A: set all/flag bits
+ * FM: field mask (fsxc)
  *
  * I=0 source=|00000000| Rm |
  * I=1 source=|rot | imm_u8 |
  */
 static int msr(char *cmd)
 {
-	return 1;
+	int p = 0;
+	int cond, rd;
+	char *src;
+	if (TOK3(cmd) != TOK3("msr") && TOK3(cmd) != TOK3("mrs"))
+		return 1;
+	cond = get_cond(cmd + 3);
+	if (cond < 0)
+		cond = 14;
+	if (TOK3(cmd) == TOK3("mrs")) {
+		rd = get_reg(tok_get());
+		tok_expect(",");
+		src = tok_get();
+		if (TOK3(src) == TOK3("sps"))
+			p = 1;
+		gen((cond << 28) | (2 << 23) | (p << 22) | (15 << 16) | (rd << 12));
+	} else {
+		int fm = 0;
+		src = tok_get();
+		if (TOK3(src) == TOK3("sps"))
+			p = 1;
+		src += 4;
+		while (*src) {
+			if (*src == 'c')
+				fm |= 1;
+			if (*src == 'x')
+				fm |= 2;
+			if (*src == 's')
+				fm |= 4;
+			if (*src == 'f')
+				fm |= 8;
+			src++;
+		}
+		if (!fm)
+			fm = 0x9;
+		tok_expect(",");
+		gen((cond << 28) | (2 << 23) | (p << 22) | (2 << 20) |
+			(fm << 16) | (15 << 12) | add_op2());
+	}
+	return 0;
+}
+
+static int get_cp(char *s)
+{
+	if (s[0] != 'p')
+		die("unknown coprocessor");
+	return atoi(s + 1);
+}
+
+static int get_cpreg(char *s)
+{
+	if (s[0] != 'c')
+		die("unknown coprocessor register");
+	return atoi(s[1] == 'r' ? s + 2 : s + 1);
+}
+
+/*
+ * move to/from coprocessor from/to register (MCR)
+ * +-------------------------------------------+
+ * |COND|1110|OP1 |L|CRn | Rd | CP |OP2 |1|CRm |
+ * +-------------------------------------------+
+ *
+ * CP: coprocessor number (px)
+ * OP1: coprocessor opcode
+ * L: store/load
+ * Rd: source register
+ * CRn: coprocessor register
+ * CRm: additional coprocessor register
+ * OP2: coprocessor opcode (or zero)
+ * A: set all/flag bits
+ */
+static int mcr(char *cmd)
+{
+	int cond;
+	int l = 0;
+	int cp, crn, rd, crm;
+	int op1, op2 = 0;
+	if (TOK3(cmd) != TOK3("mrc") &&
+			(TOK3(cmd) != TOK3("mcr") || cmd[3] == 'r'))
+		return 1;
+	if (TOK3(cmd) == TOK3("mrc"))
+		l = 1;
+	cond = get_cond(cmd + 3);
+	if (cond < 0)
+		cond = 14;
+	cp = get_cp(tok_get());
+	tok_expect(",");
+	op1 = num(tok_get(), 16);
+	tok_expect(",");
+	rd = get_reg(tok_get());
+	tok_expect(",");
+	crn = get_cpreg(tok_get());
+	tok_expect(",");
+	crm = get_cpreg(tok_get());
+	if (!tok_jmp(","))
+		op2 = num(tok_get(), 4);
+	gen((cond << 28) | (14 << 24) | (op1 << 21) | (l << 20) | (crn << 16) |
+		(rd << 12) | (cp << 8) | (op2 << 5) | (1 << 4) | crm);
+	return 0;
+}
+
+ /*
+ * move to/from two registers from/to coprocessor (MCRR/MRRC)
+ * +---------------------------------------+
+ * |COND|1100010|L| Rn | Rd | CP | OP |CRm |
+ * +---------------------------------------+
+ *
+ * L: mcrr/mrrc
+ * Rd: first register
+ * Rn: second register
+ * CP: coprocessor
+ * OP: coprocessor opcode
+ * CRm: coprocessor register
+ */
+static int mcrr(char *cmd)
+{
+	int cond;
+	int cp, op, rd, rn, crm;
+	int l = 1;
+	if ((TOK3(cmd) != TOK3("mcr") || cmd[3] != 'r') &&
+			TOK3(cmd) != TOK3("mrr"))
+		return 1;
+	if (TOK3(cmd) == TOK3("mcr"))
+		l = 0;
+	cond = get_cond(cmd + 4);
+	if (cond == -1)
+		cond = 14;
+	cp = get_cp(tok_get());
+	tok_expect(",");
+	op = num(tok_get(), 4);
+	tok_expect(",");
+	rd = get_reg(tok_get());
+	tok_expect(",");
+	rn = get_reg(tok_get());
+	tok_expect(",");
+	crm = get_cpreg(tok_get());
+	gen((cond << 28) | (0xc4 << 20) | (l << 20) | (rn << 16) | (rd << 12) |
+		(cp << 8) | (op << 4) | crm);
+	return 0;
+}
+
+/*
+ * coprocessor data processing (CDP)
+ * +-----------------------------------------+
+ * |COND|1110|OP1 |CRn |CRd | CP |OP2 |0|CRm |
+ * +-----------------------------------------+
+ *
+ * CP: coprocessor number (px)
+ * OP1: coprocessor opcode
+ * L: store/load
+ * CRd: destination register
+ * CRn: coprocessor register
+ * CRm: additional coprocessor register
+ * OP2: coprocessor opcode (or zero)
+ */
+static int cdp(char *cmd)
+{
+	int cond;
+	int cp, op1, crd, crn, crm, op2 = 0;
+	if (TOK3(cmd) != TOK3("cdp"))
+		return 1;
+	cond = get_cond(cmd + 3);
+	if (cond < 0)
+		cond = 14;
+	cp = get_cp(tok_get());
+	tok_expect(",");
+	op1 = num(tok_get(), 4);
+	tok_expect(",");
+	crd = get_cpreg(tok_get());
+	tok_expect(",");
+	crn = get_cpreg(tok_get());
+	tok_expect(",");
+	crm = get_cpreg(tok_get());
+	if (!tok_jmp(","))
+		op2 = num(tok_get(), 4);
+	gen((cond << 28) | (14 << 24) | (op1 << 20) | (crn << 16) |
+		(crd << 12) | (cp << 8) | (op2 << 5) | crm);
+	return 0;
+}
+
+/*
+ * load/store coprocessor register (LDC/STC)
+ * +------------------------------------------+
+ * |COND|110|P|U|N|W|L| Rn |CRd | CP |  OFF   |
+ * +------------------------------------------+
+ *
+ * P: post/pre-indexed
+ * U: add/subtract base
+ * N:
+ * W: write back
+ * L: store/load
+ * Rn: register
+ * CRd: coprocessor register
+ * CP: coprocessor
+ * OFF: offset
+ */
+static int ldc(char *cmd)
+{
+	int cond;
+	int l = 0;
+	int rn, crd, cp;
+	int p = 0, w = 0, u = 1, n = 0;
+	int off = 0;
+	if (TOK3(cmd) != TOK3("ldc") && TOK3(cmd) != TOK3("stc"))
+		return 1;
+	if (TOK3(cmd) == TOK3("ldc"))
+		l = 1;
+	cond = get_cond(cmd + 3);
+	n = cmd[cmd < 0 ? 3 : 5] == 'l';
+	if (cond < 0)
+		cond = 14;
+	cp = get_cp(tok_get());
+	tok_expect(",");
+	crd = get_cpreg(tok_get());
+	tok_expect(",");
+	tok_expect("[");
+	rn = get_reg(tok_get());
+	if (!tok_jmp(",")) {
+		p = 1;
+		if (!tok_jmp("#")) {
+			if (!tok_jmp("-"))
+				u = 0;
+			tok_jmp("+");
+			off = num(tok_get(), 10) >> 2;
+		}
+		tok_expect("]");
+		if (!tok_jmp("!"))
+			w = 1;
+	} else {
+		if (!tok_jmp("{")) {
+			off = num(tok_get(), 8);
+			tok_expect("}");
+		} else {
+			w = 1;
+			tok_expect("]");
+			if (!tok_jmp(",")) {
+				tok_expect("#");
+				if (!tok_jmp("-"))
+					u = 0;
+				tok_jmp("+");
+				off = num(tok_get(), 10) >> 2;
+			}
+		}
+	}
+	gen((cond << 28) | (6 << 25) | (p << 24) | (u << 23) | (n << 22) | (w << 21) |
+		(l << 20) | (rn << 16) | (crd << 12) | (cp << 8) | off);
+	return 0;
 }
 
 static int directive(char *cmd)
@@ -899,6 +1146,14 @@ static int stmt(void)
 	if (!ldm(first))
 		return 0;
 	if (!msr(first))
+		return 0;
+	if (!mcr(first))
+		return 0;
+	if (!mcrr(first))
+		return 0;
+	if (!cdp(first))
+		return 0;
+	if (!ldc(first))
 		return 0;
 	if (!swi(first))
 		return 0;
