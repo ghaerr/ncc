@@ -174,13 +174,19 @@ static int label_isextern(char *name)
 	return 0;
 }
 
+static void label_unknown(char *name)
+{
+	fprintf(stderr, "unknown label <%s>\n", name);
+	exit(1);
+}
+
 static int label_offset(char *name)
 {
 	int i;
 	for (i = 0; i < nlabels; i++)
 		if (!strcmp(name, labels[i]))
 			return loffs[i];
-	return 0;
+	label_unknown(name);
 }
 
 static int label_find(char *name, int coff)
@@ -197,6 +203,8 @@ static int label_find(char *name, int coff)
 		if (loffs[i] > coff && label_isglobal(labels[i]))
 			break;
 	}
+	if (off < 0)
+		label_unknown(name);
 	return off;
 }
 
