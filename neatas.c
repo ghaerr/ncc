@@ -195,6 +195,8 @@ static int label_find(char *name, int coff)
 	int off = -1;
 	if (!LOCALLABEL(name))
 		return label_offset(name);
+	if (name[0] == '.' && name[1] == '\0')
+		return coff;
 	for (i = 0; i < nlabels; i++) {
 		if (loffs[i] < coff && label_isglobal(labels[i]))
 			off = -1;
