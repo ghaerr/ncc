@@ -2,6 +2,7 @@
 
 # output architecture: x64, x86, arm
 OUT = x64
+CC = cc
 
 BASE = $(PWD)
 
@@ -31,10 +32,11 @@ pull:
 
 neat:
 	# compilation the programs
-	@cd neatcc && $(MAKE) OUT=$(OUT)
-	@cd neatld && $(MAKE) OUT=$(OUT)
+	@cd neatcc && $(MAKE) OUT=$(OUT) CC=$(CC)
+	@cd neatld && $(MAKE) OUT=$(OUT) CC=$(CC)
 	@cd neatlibc && $(MAKE) OUT=$(OUT) CC=../neatcc/ncc
-	@cd neatrun && $(MAKE) OUT=$(OUT) NCC=../_ncc NLD=../_nld NLC=../neatlibc
+	@cd neatrun && $(MAKE) OUT=$(OUT) CC=$(CC) \
+		NCC=../_ncc NLD=../_nld NLC=../neatlibc
 	# bootstrapping
 	@cp neatcc/ncc _ncc
 	@cp neatld/nld _nld
