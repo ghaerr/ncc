@@ -31,7 +31,7 @@ pull:
 	git pull
 
 neat:
-	# compilation the programs
+	# compiling the programs
 	@cd neatcc && $(MAKE) OUT=$(OUT) CC=$(CC)
 	@cd neatld && $(MAKE) OUT=$(OUT) CC=$(CC)
 	@cd neatlibc && $(MAKE) OUT=$(OUT) CC=../neatcc/ncc
