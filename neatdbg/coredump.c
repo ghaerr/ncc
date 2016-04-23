@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include "elfcore.h"
 
@@ -23,8 +24,7 @@
 #  define Elf_Ehdr	Elf32_Ehdr
 #endif
 
-#define ALIGN(x,a)		__ALIGN_MASK(x,(typeof(x))(a)-1)
-#define __ALIGN_MASK(x,mask)	(((x)+(mask))&~(mask))
+#define ALIGN(x, a)		(((x) + (a) - 1) & ~((a) - 1))
 
 static long readlong(char *mem, unsigned long addr)
 {
