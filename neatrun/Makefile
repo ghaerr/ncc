@@ -9,7 +9,7 @@ LDFLAGS =
 all: neatcc
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $^
+	$(CC) $(CFLAGS) -c $<
 neatcc: neatcc.o
 	$(CC) -o $@ neatcc.o $(LDFLAGS)
 clean:
