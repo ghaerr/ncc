@@ -19,9 +19,9 @@ help:
 	@echo
 
 init:
-	@test -d neatcc || git clone git://repo.or.cz/neatcc.git
-	@test -d neatld || git clone git://repo.or.cz/ld.git neatld
-	@test -d neatlibc || git clone git://repo.or.cz/neatlibc.git
+	@test -d neatcc || git clone git://github.com/aligrudi/neatcc.git
+	@test -d neatld || git clone git://github.com/aligrudi/neatld.git neatld
+	@test -d neatlibc || git clone git://github.com/aligrudi/neatlibc.git
 	@test -d neatas || git clone git://repo.or.cz/neatas.git
 
 pull:
