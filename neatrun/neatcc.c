@@ -19,7 +19,7 @@ int main(int argc, char *argv[], char *envp[])
 	if (argc < 2)
 		die("neatcc: ncc/nld wrapper\n");
 	for (i = 1; i < argc; i++)
-		if (argv[i][0] == '-' && argv[i][1] == 'c')
+		if (argv[i][0] == '-' && (argv[i][1] == 'c' || argv[i][1] == 'E'))
 			cc = 1;
 	if (cc) {
 		targv[targc++] = NCC;
