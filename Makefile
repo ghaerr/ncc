@@ -33,8 +33,8 @@ pull:
 
 neat:
 	# compiling the programs
-	@cd neatcc && $(MAKE) OUT=$(OUT) CC=$(CC)
-	@cd neatld && $(MAKE) OUT=$(OUT) CC=$(CC)
+	@cd neatcc && $(MAKE) OUT=$(OUT) CC="$(CC)"
+	@cd neatld && $(MAKE) OUT=$(OUT) CC="$(CC)"
 	@cd neatlibc && $(MAKE) OUT=$(OUT) CC=../neatcc/ncc
 	# setting up neatrun/neatcc
 	@cd neatrun && $(MAKE) OUT=$(OUT) NCC=$(BASE)/neatcc/ncc \
