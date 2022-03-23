@@ -19,10 +19,10 @@ help:
 	@echo
 
 init:
-	@test -d neatcc || git clone git://github.com/aligrudi/neatcc.git
-	@test -d neatld || git clone git://github.com/aligrudi/neatld.git neatld
-	@test -d neatlibc || git clone git://github.com/aligrudi/neatlibc.git
-	@test -d neatas || git clone git://repo.or.cz/neatas.git
+	@test -d neatcc || git clone https://github.com/aligrudi/neatcc.git
+	@test -d neatld || git clone https://github.com/aligrudi/neatld.git neatld
+	@test -d neatlibc || git clone https://github.com/aligrudi/neatlibc.git
+	@test -d neatas || git clone https://repo.or.cz/neatas.git
 
 pull:
 	cd neatcc && git pull
