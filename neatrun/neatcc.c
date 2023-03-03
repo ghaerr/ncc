@@ -5,7 +5,7 @@
 
 #define MAXARGS		512
 #define LDOPTS		"lLsgmpe"	/* neatld options */
-#define CCOPTS		"cIEDW"		/* neatcc options */
+#define CCOPTS		"cIOEDW"	/* neatcc options */
 #define AROPTS		"IDOlLome"	/* options with an argument */
 
 static void die(char *msg)
