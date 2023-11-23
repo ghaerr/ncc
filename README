@@ -1,0 +1,10 @@
+NEATCC TOP-LEVEL MAKEFILE
+=========================
+
+This directory contains the top-level makefile of neatcc, to
+obtain and build neatcc, neatld, and neatlibc.
+
+$ make init			# Check out the repositories
+$ make neat			# Build the programs
+$ cp neatrun/neatcc ~/bin/	# The main executable
+$ cd demo && make		# A small test
