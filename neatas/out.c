@@ -1,4 +1,4 @@
-#include <elf.h>
+#include "../neatlibc/elf.h"
 #include <string.h>
 #include <unistd.h>
 #include "out.h"

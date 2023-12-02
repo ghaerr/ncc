@@ -187,6 +187,7 @@ static int label_offset(char *name)
 		if (!strcmp(name, labels[i]))
 			return loffs[i];
 	label_unknown(name);
+    return 0;       /* stop compiler warning */
 }
 
 static int label_find(char *name, int coff)
@@ -314,12 +315,14 @@ static long dat_locs[NDATS];		/* address of pointing ldr */
 static char dat_names[NDATS][NAMELEN];	/* relocation data symbol name */
 static int ndats;
 
+#if 0
 static void pool_num(long num)
 {
 	int idx = ndats++;
 	dat_offs[idx] = num;
 	dat_locs[idx] = cslen;
 }
+#endif
 
 static void pool_reloc(char *name, long off)
 {
@@ -385,6 +388,7 @@ static int get_reg(char *s)
 	if (s[0] == 'r')
 		return atoi(s + 1);
 	die("unknown register");
+    return 0;       /* stop compiler warning */
 }
 
 static void fill_buf(int fd)
