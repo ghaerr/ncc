@@ -1,5 +1,5 @@
 /* neatcc ELF object generation */
-#include <elf.h>
+#include "../neatlibc/elf.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -231,7 +231,7 @@ static void i_shl(int op, int rd, int r1, int rs)
 	int sm = 4;
 	if ((op & 0x0f) == 1)
 		sm = bt & T_MSIGN ? 7 : 5;
-	op_rr(I_SHX, sm, rd, LONGSZ);
+	op_rr(I_SHX, sm, rd, LONGSZ);       //FIXME tb8.c needs 4 here
 }
 
 static void i_shl_imm(int op, int rd, int rn, long n)
@@ -546,7 +546,7 @@ static void i_shortjumps(int *nb)
 	char *c = mem_get(&cs);
 	int i;
 	for (i = 0; i < jmp_n; i++)
-		nb[i] = abs(lab_loc[jmp_dst[i]] - jmp_off[i]) < 0x70 ? 1 : 4;
+		nb[i] = labs(lab_loc[jmp_dst[i]] - jmp_off[i]) < 0x70 ? 1 : 4;
 	for (i = 0; i < jmp_n; i++) {
 		long cur = jmp_off[i] - i_jlen(jmp_op[i], 4);
 		while (rel < rel_n && rel_off[rel] <= cur)

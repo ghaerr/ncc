@@ -537,7 +537,7 @@ static char *tmp_str(char *buf, int len)
 {
 	static char name[NAMELEN];
 	static int id;
-	sprintf(name, "__neatcc.s%d", id++);
+	sprintf(name, "L_.str.%d", id++);
 	buf[len] = '\0';
 	o_dscpy(o_dsnew(name, len + 1, 0), buf, len + 1);
 	return name;
@@ -1651,7 +1651,11 @@ static void parse(void)
 static void compat_macros(void)
 {
 	cpp_define("__STDC__", "");
+#ifdef __APPLE__
+	cpp_define("__APPLE__", "");
+#else
 	cpp_define("__linux__", "");
+#endif
 	cpp_define(I_ARCH, "");
 	cpp_define("__neatcc__", "");
 
@@ -1681,6 +1685,9 @@ int main(int argc, char *argv[])
 	int ofd = 1;
 	int cpp = 0;
 	int i;
+    printf("NCC ARGS: ");
+    for (i=0; i<argc; i++) printf("%s ", argv[i]);
+    printf("\n");
 	compat_macros();
 	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
 		if (argv[i][1] == 'I')
