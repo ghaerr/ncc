@@ -1,0 +1,11 @@
+*.o
+demo/test
+demo/test2
+ldelf/ldelf
+neatas/neatas
+neatcc/ncc
+neatdbg/coredump
+neatdbg/elfloc
+neatld/nld
+neatlibc/libc.a
+neatrun/neatcc
