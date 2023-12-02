@@ -1,11 +1,12 @@
 #!/bin/sh
+LOADER=../ldelf/ldelf
 for i in `seq -w 0 30`
 do
 	f="b$i.x"
 	if test -f $f
 	then
 		n=`echo $i | sed 's/^0\+//'`
-		./$f
+		$LOADER ./$f
 		o="$?"
 		if test $o != $n
 		then
@@ -16,7 +17,7 @@ done
 
 for x in t??.x
 do
-	./$x
+	$LOADER ./$x
 	o=$?
 	if test "$o" != "0"
 	then

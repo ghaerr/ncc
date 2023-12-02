@@ -1,7 +1,7 @@
-format ELF64
+;default rel            ; default generate rip-relative code
 
-extrn main
-public _start
+        extern main
+        global _start
 _start:
 	xor	rbp, rbp
 	pop	rdi			; argc
@@ -12,5 +12,9 @@ _start:
 
 	call	main
 	mov	rdi, rax
-	mov	rax, 60
+%ifdef Darwin
+	mov     rax,0x2000001           ; OSX _exit
+%else
+	mov     rax,60                  ; Linux _exit
+%endif
 	syscall

@@ -5,7 +5,7 @@
  *
  * This program is released under the Modified BSD license.
  */
-#include <elf.h>
+#include "../neatlibc/elf.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>

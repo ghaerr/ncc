@@ -1,12 +1,15 @@
 # output architecture: x64, x86, arm
 OUT = x64
 
+# platform uname for syscalls
+PLATFORM=$(shell uname)
+
 CC = ../neatcc/ncc	# the neatcc binary
 LD = ../neatld/nld	# the neatld binary
 
 # default assemblers
-ASx64 = fasm
-ASx86 = fasm
+ASx64 = nasm -f elf64 -d$(PLATFORM)
+ASx86 = nasm -f elf
 ASarm = neatas
 
 AS = $(AS$(OUT))
@@ -35,10 +38,11 @@ all: $(OUT).o \
 	t88.x t89.x t8a.x t8b.x t8c.x t8d.x t8e.x t8f.x \
 	t90.x t91.x t92.x t93.x t94.x t95.x t96.x t97.x \
 	t98.x t99.x
+	./test.sh
 
 .SECONDARY:
 %.o: %.s
-	$(AS) $^ $@
+	$(AS) $^ -o $@
 %.o: %.c
 	$(CC) -c $<
 %.x: %.o $(OUT).o

@@ -11,27 +11,18 @@ all: help
 help:
 	@echo "Neatcc top-level makefile"
 	@echo
-	@echo "   init        Initialise git repositories"
 	@echo "   neat        Compile the programs"
 	@echo "   boot        Compile neatcc using itself"
+	@echo "   test        Run compiler tests"
 	@echo "   pull        Update git repositories"
 	@echo "   clean       Remove the generated files"
 	@echo
 
-init:
-	@test -d neatcc || git clone https://github.com/aligrudi/neatcc.git
-	@test -d neatld || git clone https://github.com/aligrudi/neatld.git neatld
-	@test -d neatlibc || git clone https://github.com/aligrudi/neatlibc.git
-	@test -d neatas || git clone https://repo.or.cz/neatas.git
-
 pull:
-	cd neatcc && git pull
-	cd neatld && git pull
-	cd neatlibc && git pull
-	cd neatas && git pull
 	git pull
 
 neat:
+	@cd ldelf && $(MAKE)
 	# compiling the programs
 	@cd neatcc && $(MAKE) OUT=$(OUT) CC="$(CC)"
 	@cd neatld && $(MAKE) OUT=$(OUT) CC="$(CC)"
@@ -40,28 +31,44 @@ neat:
 	@cd neatrun && $(MAKE) OUT=$(OUT) NCC=$(BASE)/neatcc/ncc \
 		NLD=$(BASE)/neatld/nld NLC=$(BASE)/neatlibc clean all
 	# compiling the rest
-	@cd neatas && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT)
+	#@cd neatas && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT)
+	@cd neatas && $(MAKE) OUT=$(OUT)
 	@cd neatdbg && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT)
+	#@cd neatdbg && $(MAKE) OUT=$(OUT)
+	# compiling demos
+	@cd demo && $(MAKE)
 
 boot:
 	# the previous version
 	@cp neatrun/neatcc _neatcc
+	# 0000000000
 	@cd neatrun && $(MAKE) OUT=$(OUT) CC=../_neatcc \
 		NCC=../_ncc NLD=../_nld NLC=../neatlibc clean all
 	@cp neatcc/ncc _ncc
 	@cp neatld/nld _nld
 	@cp neatrun/neatcc _neatcc
 	# compiling the programs
-	@cd neatcc && $(MAKE) OUT=$(OUT) CC=../_neatcc clean all
-	@cd neatld && $(MAKE) OUT=$(OUT) CC=../_neatcc clean all
-	@cd neatlibc && $(MAKE) OUT=$(OUT) CC=../neatcc/ncc clean all
+	# 1111111111
+	@cd neatcc && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" clean all
+	# 2222222222
+	@cd neatld && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" clean all
+	# 3333333333
+	@cd neatlibc && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../neatcc/ncc" clean all
 	# setting up neatrun/neatcc
-	@cd neatrun && $(MAKE) OUT=$(OUT) CC=../_neatcc NCC=$(BASE)/neatcc/ncc \
+	# 4444444444
+	@cd neatrun && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" NCC=$(BASE)/neatcc/ncc \
 		NLD=$(BASE)/neatld/nld NLC=$(BASE)/neatlibc clean all
 	@rm _ncc _nld _neatcc
 	# compiling the rest
-	@cd neatas && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT) clean all
-	@cd neatdbg && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT) clean all
+	# 5555555555
+	@cd neatas && $(MAKE) CC="../ldelf/ldelf ../neatrun/neatcc" OUT=$(OUT) clean all
+	# 6666666666
+	@cd neatdbg && $(MAKE) CC="../ldelf/ldelf ../neatrun/neatcc" OUT=$(OUT) clean all
+	@echo DONE
+
+.PHONY: test
+test:
+	@cd test && $(MAKE)
 
 clean:
 	@cd neatcc && $(MAKE) clean
@@ -70,3 +77,6 @@ clean:
 	@cd neatld && $(MAKE) clean
 	@cd neatrun && $(MAKE) clean
 	@cd neatdbg && $(MAKE) clean
+	@cd ldelf && $(MAKE) clean
+	@cd demo && $(MAKE) clean
+	@cd test && $(MAKE) clean

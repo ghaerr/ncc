@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -14,6 +15,15 @@ static void die(char *msg)
 	exit(1);
 }
 
+void display(char *str, char **args)
+{
+    printf("%s", str);
+    while (*args) {
+        printf("%s ", *args++);
+    }
+    printf("\n");
+}
+
 int main(int argc, char *argv[], char *envp[])
 {
 	char *ccargs[MAXARGS];		/* neatcc options */
@@ -24,6 +34,7 @@ int main(int argc, char *argv[], char *envp[])
 	int ldargc = 0;			/* number of neatld options */
 	int nold = 0;			/* compile only */
 	int i;
+	display("NEATCC ARGS: ", argv);
 	if (argc < 2)
 		die("neatcc: ncc/nld wrapper\n");
 	/* looking for options that prevent linking + initialize opt[] and optarg[] */
@@ -39,7 +50,7 @@ int main(int argc, char *argv[], char *envp[])
 	ccargs[ccargc++] = "-D__extension__=";
 	ccargs[ccargc++] = "-I" NLC;
 	for (i = 1; i < argc; i += 1 + optarg[i]) {
-		if (opt[i] && strchr(CCOPTS, opt[i]) || (nold && opt[i] == 'o')) {
+		if (opt[i] && (strchr(CCOPTS, opt[i]) || (nold && opt[i] == 'o'))) {
 			ccargs[ccargc++] = argv[i];
 			if (optarg[i])
 				ccargs[ccargc++] = argv[i + 1];
@@ -53,6 +64,7 @@ int main(int argc, char *argv[], char *envp[])
 			int st;
 			ccargs[ccargc] = arg;
 			ccargs[ccargc + 1] = NULL;
+			display("+", ccargs);
 			if (fork() == 0) {
 				execve(ccargs[0], ccargs, envp);
 				die("neatcc: could not find ncc\n");
@@ -76,6 +88,7 @@ int main(int argc, char *argv[], char *envp[])
 		ldargs[ldargc++] = NLC "/start.o";
 		ldargs[ldargc++] = NLC "/libc.a";
 		ldargs[ldargc] = NULL;
+		display("+", ldargs);
 		execve(ldargs[0], ldargs, envp);
 		die("neatcc: could not find nld\n");
 	}
