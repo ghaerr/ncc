@@ -1,10 +1,60 @@
-NEATCC TOP-LEVEL MAKEFILE
-=========================
+The NCC Project
+===============
 
-This directory contains the top-level makefile of neatcc, to
-obtain and build neatcc, neatld, and neatlibc.
+NCC is an experimental project combining the amazing work of Ali Rudi's
+neatcc C compiler, neatld ELF linker, and neatlibc C library with an ELF
+loader for macOS, allowing tiny binaries to be created for direct execution
+on macOS or Linux, and eventually bare metal.
 
-$ make init			# Check out the repositories
-$ make neat			# Build the programs
-$ cp neatrun/neatcc ~/bin/	# The main executable
-$ cd demo && make		# A small test
+This project is a combined fork of Ali's separate repos to eventually
+allow the system to be used as a library for extending the functionality
+of programs by compiling and linking into a running process, or used as
+a tiny self-compiling language system for bare metal.
+
+The C compiler supports a large subset of ANSI C, but most importantly
+lacks support for bitfields, inline assembly and floating point types.
+
+The compiler supports direct optimized compilation into ELF object
+files for Aarch64 and Intel x86-64, and uses a tiny linker to create
+static ELF binaries for macOS or Linux. Since the output format is
+ELF, macOS requires an ELF loader. The application code, data, heap
+and stack segments can be configured for execution in various parts
+of the 64-bit address space.
+
+The included C library is self-hosted and makes direct system calls
+to macOS or Linux, producing binaries with no dependencies on any
+shared libraries. Shared libraries are purposely not supported, for
+simplification of compiler output and speed.
+
+For now, the startup and syscall parts of the C library are assembled
+using nasm for x86-64, and the included neatas assembler for Aarch64.
+The compiler output itself is direct to ELF object, no need for assembly.
+
+
+BUILDING
+========
+
+Since development has just started and is being done on macOS,
+currently only macOS has been tested (that should change soon).
+
+To build for use on a hosted system:
+
+$ make neat                 # build neatcc, ncc, nld, neatas, libc.a and runs demo/test.c
+$ make test                 # run compiler test suite
+
+DIRECTORY STRUCTURE
+===================
+
+neatrun/            Compiler driver 'neatcc'
+neatcc/             Compiler 'ncc'
+neatld/             Linker 'nld'
+neatas/             Aarch64 assembler 'neatas'
+neatlibc/           C startup and library for Linux and macOS 'start.o/libc.a'
+neatdbg/            Debug tools
+demo/               Demo programs
+test/               Compiler test suite
+ldelf/              ELF loader for non-ELF systems
+
+LICENSE
+=======
+ISC License
