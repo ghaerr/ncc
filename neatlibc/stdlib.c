@@ -6,8 +6,6 @@
 
 #define ATEXIT_MAX		32
 
-char **environ;
-
 int abs(int n)
 {
 	return n >= 0 ? n : -n;

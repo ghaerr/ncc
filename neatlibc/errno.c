@@ -38,5 +38,4 @@ char *sys_errlist[] = {
 	[ERANGE]	= "Result not representable",
 };
 
-int errno;
 int sys_nerr = sizeof(sys_errlist) / sizeof(sys_errlist[0]);

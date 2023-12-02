@@ -1,3 +1,32 @@
+
+#ifdef __APPLE__
+/* sys/ioccom.h */
+#define IOCPARM_MASK    0x1fff          /* parameter length, at most 13 bits */
+#define IOC_VOID        0x20000000
+#define IOC_OUT         0x40000000      /* copy parameters out */
+#define IOC_IN          0x80000000      /* copy parameters in */
+#define IOC_INOUT       (IOC_IN|IOC_OUT)/* copy paramters in and out */
+#define _IOC(inout, group, num, len) \
+        (inout | ((len & IOCPARM_MASK) << 16) | ((group) << 8) | (num))
+#define _IO(g, n)       _IOC(IOC_VOID, (g), (n), 0)
+#define _IOR(g, n, t)   _IOC(IOC_OUT, (g), (n), sizeof(t))
+#define _IOW(g, n, t)   _IOC(IOC_IN,  (g), (n), sizeof(t))
+#define _IOWR(g, n, t)  _IOC(IOC_INOUT,   (g), (n), sizeof(t))
+
+/* sys/ttycom.h */
+#define TIOCGETA        _IOR('t', 19, struct termios) /* get termios struct */
+#define TIOCSETA        _IOW('t', 20, struct termios) /* set termios struct */
+#define TIOCSETAW       _IOW('t', 21, struct termios) /* drain output, set */
+#define TIOCSETAF       _IOW('t', 22, struct termios) /* drn out, fls in, set */
+
+/* compatibility defines */
+#define TCGETS          TIOCGETA
+#define TCSETS          TIOCSETA
+#define TCSETSW         TIOCSETAW
+#define TCSETSF         TIOCSETAF
+
+#else
+
 #define TCGETS		0x5401
 #define TCSETS		0x5402
 #define TCSETSW		0x5403
@@ -50,5 +79,7 @@
 #define SIOCGPGRP	0x8904
 #define SIOCATMARK	0x8905
 #define SIOCGSTAMP	0x8906
+
+#endif
 
 int ioctl(int fd, int cmd, ...);

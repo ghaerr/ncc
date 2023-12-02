@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <errno.h>
 
 #define PGSIZE		4096
 #define PGMASK		(PGSIZE - 1)
@@ -21,18 +22,28 @@ struct mhdr {
 
 static struct mset *pool;
 
+static long heaptop =  0x0000000080000000;     /* 2G growing upwards */
+
 static int mk_pool(void)
 {
 	if (pool && !pool->refs) {
 		pool->size = sizeof(*pool);
 		return 0;
 	}
+#ifdef __APPLE__
+	pool = mmap(heaptop, MSETLEN, PROT_READ | PROT_WRITE,
+				MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#else
 	pool = mmap(NULL, MSETLEN, PROT_READ | PROT_WRITE,
 				MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
 	if (pool == MAP_FAILED) {
+        printf("pool malloc %lx, errno %d\n", pool, errno);
 		pool = NULL;
 		return 1;
 	}
+    heaptop += MSETLEN;
+    if (heaptop & 0xFFFFFFFF00000000) printf("malloc addr > 32 bits\n");
 	pool->size = sizeof(*pool);
 	pool->refs = 0;
 	return 0;
@@ -42,11 +53,20 @@ void *malloc(long n)
 {
 	void *m;
 	if (n >= MSETMAX) {
+#ifdef __APPLE__
+		m = mmap(heaptop, n + PGSIZE, PROT_READ | PROT_WRITE,
+				MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#else
 		m = mmap(NULL, n + PGSIZE, PROT_READ | PROT_WRITE,
 				MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-		if (m == MAP_FAILED)
+#endif
+		if (m == MAP_FAILED) {
+            printf("mmap malloc %lx, errno %d\n", m, errno);
 			return NULL;
+		}
 		*(long *) m = n + PGSIZE;	/* store length in the first page */
+        heaptop += (n + PGSIZE + PGSIZE - 1) & ~PGMASK;
+        if (heaptop & 0xFFFFFFFF00000000) printf("malloc addr > 32 bits\n");
 		return m + PGSIZE;
 	}
 	if (!pool || pool->size + n + sizeof(struct mhdr) > MSETLEN)

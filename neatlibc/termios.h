@@ -7,6 +7,17 @@ struct winsize {
 	unsigned short ws_ypixel;
 };
 
+#ifdef __APPLE__
+struct termios {
+	unsigned long c_iflag;
+	unsigned long c_oflag;
+	unsigned long c_cflag;
+	unsigned long c_lflag;
+	unsigned char c_cc[20];
+    unsigned long c_ispeed;
+    unsigned long c_ospeed;
+};
+#else
 struct termios {
 	unsigned c_iflag;
 	unsigned c_oflag;
@@ -15,6 +26,7 @@ struct termios {
 	unsigned char c_line;
 	unsigned char c_cc[19];
 };
+#endif
 
 /* c_cc characters */
 #define VINTR		0

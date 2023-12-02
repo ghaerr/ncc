@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <signal.h>
 
+#ifndef __APPLE__
 int sleep(int n)
 {
 	struct timespec req = {n, 0};
@@ -13,8 +14,36 @@ int sleep(int n)
 		return rem.tv_sec;
 	return 0;
 }
+#endif
 
 #define EXECARGS	(1 << 7)
+
+int _execve(char *path, char *argv[], char *envp[]);
+
+int execve(char *path, char *argv[], char *envp[])
+{
+#ifdef __APPLE__
+    int fd;
+    char *argv2[EXECARGS];
+
+    fd = open(path, 0);
+    if (fd >= 0) {
+        char **p = argv, **q = argv2;
+        char buf[2];
+        if (read(fd, buf, 2) == 2 && buf[0] == 0x7f && buf[1] == 0x45) {
+            close(fd);
+            path = LOADER;              //FIXME remove hard path
+            printf("+elf %s ", path);
+            *q++ = path;
+            while ((*q++ = *p++) != 0)
+                printf("%s ", q[-1]);
+            printf("\n");
+            argv = argv2;
+        }
+    }
+#endif
+    return _execve(path, argv, envp);
+}
 
 int execle(char *path, ...)
 {

@@ -40,6 +40,30 @@
 
 #ifdef __x86_64__
 
+#ifdef __APPLE__
+struct stat {
+	uint32_t	st_dev;
+	unsigned int	st_ino;
+	uint16_t	st_mode;
+	uint16_t	st_nlink;
+	uint16_t	st_uid;
+	uint16_t	st_gid;
+	uint32_t	st_rdev;        /* device type */
+	long		st_atime;
+	unsigned long	st_atime_nsec;
+	long		st_mtime;
+	unsigned long	st_mtime_nsec;
+	long		st_ctime;
+	unsigned long	st_ctime_nsec;
+	unsigned long	st_size;
+        unsigned int	st_blocks;      /* blocks allocated for file */
+	unsigned long	st_blksize;     /* optimal blocksize for I/O */
+	unsigned int	st_flags;       /* user flags */
+	unsigned int	st_gen;         /* file generation number */
+	unsigned int    st_spare;
+	unsigned long   st_qspare[2];
+};
+#else
 struct stat {
 	unsigned long	st_dev;
 	unsigned long	st_ino;
@@ -60,6 +84,7 @@ struct stat {
 	unsigned long	st_ctime_nsec;
 	long		__unused[3];
 };
+#endif
 
 #else
 

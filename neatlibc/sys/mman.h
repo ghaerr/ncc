@@ -9,6 +9,10 @@
 #define MAP_SHARED	0x01
 #define MAP_PRIVATE	0x02
 
+#ifdef __APPLE__
+#define MAP_FIXED       0x10	        /* Interpret addr exactly */
+#define MAP_ANONYMOUS	0x1000          /* don't use a file */
+#else
 #define MAP_FIXED	0x10		/* Interpret addr exactly */
 #define MAP_ANONYMOUS	0x20		/* don't use a file */
 #define MAP_GROWSDOWN	0x0100		/* stack-like segment */
@@ -17,9 +21,10 @@
 #define MAP_LOCKED	0x2000		/* pages are locked */
 #define MAP_NORESERVE	0x4000		/* don't check for reservations */
 #define MAP_POPULATE	0x8000
+#endif
+
 #define MAP_ANON	MAP_ANONYMOUS
 #define MAP_FILE	0
-
 #define MAP_FAILED      ((void *) -1)
 
 void *mmap(void *addr, int len, int prot, int flags, int fd, int offset);

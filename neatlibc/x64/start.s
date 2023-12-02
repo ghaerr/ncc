@@ -1,11 +1,9 @@
+;default rel            ; default generate rip-relative code
 
-
-
-extern environ
-
-extern main
-extern __neatlibc_exit
-global _start
+        extern main
+        extern __neatlibc_exit
+        extern _exit
+        global _start:function
 _start:
 	xor	rbp, rbp
 	pop	rdi			; argc
@@ -17,7 +15,10 @@ _start:
 
 	call	main
 	mov	rbx, rax
-	call	__neatlibc_exit
+	;call	__neatlibc_exit
 	mov	rdi, rbx
-	mov	rax, 60
-	syscall
+	call    _exit
+
+        SECTION .data
+        global  environ:object
+environ:dq      0
