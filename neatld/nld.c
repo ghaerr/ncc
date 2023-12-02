@@ -16,32 +16,37 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 #include <ctype.h>
-#include <elf.h>
+#include "../neatlibc/elf.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdarg.h>
+
+//#define DEBUG(...)
+#define DEBUG		debug
 
 #define I_CS		0
 #define I_DS		1
 #define I_BSS		2
 
-static unsigned long sec_vaddr[3] = {0x800000};	/* virtual address of sections */
-static unsigned long sec_laddr[3] = {0x800000};	/* load address of sections */
+static unsigned long sec_vaddr[3] = {0x400000};	/* virtual address of sections */
+static unsigned long sec_laddr[3] = {0x400000};	/* load address of sections */
 static int sec_set[3] = {1};			/* set address for section */
 static int secalign = 16;			/* section alignment */
 static char *entry = "_start";			/* entry symbol */
 static int e_machine;				/* target machine */
 static int e_flags;				/* elf ehdr flags */
+static int undefs;
 
 #define MAXSECS		(1 << 10)
 #define MAXOBJS		(1 << 7)
 #define MAXSYMS		(1 << 12)
 #define PAGE_SIZE	(1 << 12)
 #define PAGE_MASK	(PAGE_SIZE - 1)
-#define MAXFILES	(1 << 10)
+#define MAXFILES	(1 << 8)
 #define MAXPHDRS	4
 
 #define MAX(a, b)	((a) > (b) ? (a) : (b))
@@ -117,7 +122,7 @@ struct outelf {
 	int bss_len;
 
 	/* symtab section */
-	Elf_Shdr shdr[MAXSECS];
+	Elf_Shdr shdr[MAXSECS];         //FIXME this is too large?
 	int nsh;
 	char symstr[MAXSYMS];
 	Elf_Sym syms[MAXSYMS];
@@ -129,6 +134,14 @@ struct outelf {
 };
 
 static int nosyms = 0;
+
+void debug(char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+}
 
 static Elf_Sym *obj_find(struct obj *obj, char *name)
 {
@@ -238,13 +251,15 @@ static unsigned long symval(struct outelf *oe, struct obj *obj, Elf_Sym *sym)
 	case STT_OBJECT:
 	case STT_FUNC:
 		if (name && *name && sym->st_shndx == SHN_UNDEF)
-			if (outelf_find(oe, name, &obj, &sym))
-				die_undef(name);
+			if (outelf_find(oe, name, &obj, &sym)) {
+				undefs++;
+				fprintf(stderr, "%s undefined\n", name);
+				return 0;
+			}
 		if (sym->st_shndx == SHN_COMMON)
 			return bss_addr(oe, sym);
 		s_idx = sym->st_shndx;
 		s_off = sym->st_value;
-		sec = outelf_mapping(oe, &obj->shdr[s_idx]);
 		if ((sec = outelf_mapping(oe, &obj->shdr[s_idx])))
 			return sec->vaddr + s_off;
 	}
@@ -342,23 +357,38 @@ static void outelf_reloc(struct outelf *oe)
 	}
 }
 
-static void alloc_bss(struct outelf *oe, Elf_Sym *sym)
+static void alloc_common(struct outelf *oe, Elf_Sym *sym)
 {
 	int n = oe->nbss_syms++;
-	int off = ALIGN(oe->bss_len, MAX(sym->st_value, 4));
+	int off = ALIGN(oe->bss_len, MAX(sym->st_size, 4));
 	oe->bss_syms[n].sym = sym;
 	oe->bss_syms[n].off = off;
 	oe->bss_len = off + sym->st_size;
 }
 
-static void outelf_bss(struct outelf *oe)
+static void outelf_common(struct outelf *oe)
 {
 	int i, j;
 	for (i = 0; i < oe->nobjs; i++) {
 		struct obj *obj = &oe->objs[i];
-		for (j = 0; j < obj->nsyms; j++)
-			if (obj->syms[j].st_shndx == SHN_COMMON)
-				alloc_bss(oe, &obj->syms[j]);
+		for (j = 0; j < obj->nsyms; j++) {
+			Elf_Sym *sym = &obj->syms[j];
+			if (obj->syms[j].st_shndx == SHN_COMMON) {
+				printf("COMM %s st_size %ld st_value %ld\n",
+					obj->symstr + sym->st_name, (long)sym->st_size,
+					(long)sym->st_value);
+				alloc_common(oe, &obj->syms[j]);
+			} else {
+				int type = ELF_ST_TYPE(sym->st_info);
+				Elf_Shdr *shdr = &obj->shdr[sym->st_shndx];
+				if (type == STT_OBJECT && shdr->sh_type == SHT_NOBITS) {
+					DEBUG("BSS %s st_size %ld st_value %ld st_shndx %d\n",
+						obj->symstr + sym->st_name,
+						(long)sym->st_size, (long)sym->st_value,
+						sym->st_shndx);
+				}
+			}
+		}
 	}
 }
 
@@ -435,7 +465,7 @@ static void build_symtab(struct outelf *oe)
 	sym_shdr->sh_offset = oe->syms_faddr;
 	sym_shdr->sh_size = oe->nsyms * sizeof(oe->syms[0]);
 	sym_shdr->sh_link = str_shdr - oe->shdr;
-	sym_shdr->sh_info = 0;
+	sym_shdr->sh_info = 1;      /* index of first global */
 
 	cs_shdr->sh_type = SHT_PROGBITS;
 	cs_shdr->sh_flags = SHF_ALLOC | SHF_EXECINSTR;
@@ -492,14 +522,20 @@ static void outelf_write(struct outelf *oe, int fd)
 	}
 }
 
-static void outelf_add(struct outelf *oe, char *mem)
+static int outelf_add(struct outelf *oe, char *mem)
 {
 	Elf_Ehdr *ehdr = (void *) mem;
 	Elf_Shdr *shdr = (void *) (mem + ehdr->e_shoff);
 	struct obj *obj;
 	int i;
-	if (ehdr->e_type != ET_REL)
-		return;
+	if (mem[0] != 0x7f && mem[1] != 0x45) {
+		DEBUG("Not ELF\n");
+		return 0;
+	}
+	if (ehdr->e_type != ET_REL) {
+		DEBUG("Not ET_REL\n");
+		return 0;
+	}
 	e_machine = ehdr->e_machine;
 	e_flags = ehdr->e_flags;
 	if (oe->nobjs >= MAXOBJS)
@@ -516,6 +552,7 @@ static void outelf_add(struct outelf *oe, char *mem)
 		sec->o_shdr = &shdr[i];
 		sec->obj = obj;
 	}
+	return 1;
 }
 
 static int link_cs(struct outelf *oe, Elf_Phdr *phdr, unsigned long faddr,
@@ -615,7 +652,7 @@ static void outelf_link(struct outelf *oe)
 	faddr += len;
 	vaddr = sec_set[I_BSS] ? sec_vaddr[I_BSS] | (faddr & PAGE_MASK) :
 		vaddr + PAGE_SIZE + len;
-	outelf_bss(oe);
+	outelf_common(oe);
 	oe->bss_vaddr = vaddr;
 	len = link_bss(oe, &oe->phdr[2], faddr, vaddr, oe->bss_len);
 
@@ -639,11 +676,53 @@ static int get_be32(unsigned char *s)
 	return s[3] | (s[2] << 8) | (s[1] << 16) | (s[0] << 24);
 }
 
-static int sym_undef(struct outelf *oe, char *name)
+static int sym_defined(struct outelf *oe, char *name, int skipobj)
+{
+        int i, j;
+        for (i = 0; i < oe->nobjs; i++) {
+                struct obj *obj = &oe->objs[i];
+                if (i == skipobj) continue;
+                for (j = 0; j < obj->nsyms; j++) {
+                        Elf_Sym *sym = &obj->syms[j];
+                        if (ELF_ST_BIND(sym->st_info) == STB_LOCAL)
+                                continue;
+                        if (strcmp(name, obj->symstr + sym->st_name))
+                                continue;
+                        if (sym->st_shndx != SHN_UNDEF)
+                                return 1;
+                }
+        }
+        return 0;
+}
+
+static int outelf_multidef(struct outelf *oe)
+{
+        int i, j;
+        int multidef = 0;
+        for (i = 0; i < oe->nobjs; i++) {
+                struct obj *obj = &oe->objs[i];
+                for (j = 0; j < obj->nsyms; j++) {
+                        Elf_Sym *sym = &obj->syms[j];
+                        if (ELF_ST_BIND(sym->st_info) == STB_LOCAL)
+                                continue;
+                        if (sym->st_shndx != SHN_UNDEF) {
+                                if (sym_defined(oe, obj->symstr + sym->st_name, i)) {
+                                        printf("%s multiply defined\n",
+                                                obj->symstr + sym->st_name);
+                                        multidef++;
+                                }
+                        }
+                }
+        }
+        return multidef;
+}
+
+/* search whether passed symbol is still undefined, return 1 to load archive */
+static int sym_undef(struct outelf *oe, char *name, int nobjs)
 {
 	int i, j;
-	int undef = 0;
-	for (i = 0; i < oe->nobjs; i++) {
+	int undef = 0;                          /* default undefined but don't load archive */
+	for (i = 0; i < nobjs; i++) {
 		struct obj *obj = &oe->objs[i];
 		for (j = 0; j < obj->nsyms; j++) {
 			Elf_Sym *sym = &obj->syms[j];
@@ -652,8 +731,8 @@ static int sym_undef(struct outelf *oe, char *name)
 			if (strcmp(name, obj->symstr + sym->st_name))
 				continue;
 			if (sym->st_shndx != SHN_UNDEF)
-				return 0;
-			undef = 1;
+				return 0;       /* symbol defined, don't load archive */
+			undef = 1;              /* symbol defined, load archive */
 		}
 	}
 	return undef;
@@ -671,7 +750,7 @@ static int outelf_ar_link(struct outelf *oe, char *ar, int base)
 	for (i = 0; i < nsyms; i++) {
 		int off = get_be32((void *) ar_index + i * 4) +
 				sizeof(struct arhdr);
-		if (sym_undef(oe, ar_name)) {
+		if (sym_undef(oe, ar_name, oe->nobjs)) {
 			outelf_add(oe, ar - base + off);
 			added++;
 		}
@@ -680,10 +759,44 @@ static int outelf_ar_link(struct outelf *oe, char *ar, int base)
 	return added;
 }
 
+static int outelf_ar_macos(struct outelf *oe, char *ar)
+{
+        int i;
+        char *name;
+        int added = 0;
+        int onsecs = oe->nsecs;
+        int onobjs = oe->nobjs;
+        if (!outelf_add(oe, ar))
+                return 0;
+        struct obj *obj = &oe->objs[oe->nobjs-1];
+        for (i = 0; i < obj->nsyms; i++) {
+                Elf_Sym *sym = &obj->syms[i];
+                if (ELF_ST_BIND(sym->st_info) == STB_LOCAL)
+                        continue;
+                if (sym->st_shndx != SHN_UNDEF) {
+                        name = obj->symstr + sym->st_name;
+                        DEBUG("%s, ", name);
+                        if (sym_undef(oe, name, oe->nobjs-1)) {
+                                DEBUG("(Found)\n");
+                                added++;
+                                break;
+                        }
+                }
+        }
+        if (!added) {
+                oe->nsecs = onsecs;
+                oe->nobjs = onobjs;
+        }
+        return added;
+}
+
 static void outelf_archive(struct outelf *oe, char *ar)
 {
 	char *beg = ar;
+	int count = 1;
+	int found = 0;
 
+again:
 	/* skip magic */
 	ar += 8;
 	for(;;) {
@@ -694,14 +807,29 @@ static void outelf_archive(struct outelf *oe, char *ar)
 		hdr->ar_size[sizeof(hdr->ar_size) - 1] = '\0';
 		size = atoi(hdr->ar_size);
 		size = (size + 1) & ~1;
-		if (name[0] == '/' && name[1] == ' ') {
-			while (outelf_ar_link(oe, ar, ar - beg))
-				;
-			return;
+		if (!size && !*name)
+			break;
+		if (!strncmp(name, "#1/", 3)) {
+			name += sizeof(*hdr);
+			DEBUG("LIB %s: ", name);
+			if (outelf_ar_macos(oe, name + atoi(&hdr->ar_name[3])))
+				found++;
+		} else {
+			if (name[0] == '/' && name[1] == ' ') {
+				while (outelf_ar_link(oe, ar, ar - beg))
+					;
+				break;
+			}
+			if (name[0] == '/' && name[1] == '/' && name[2] == ' ')
+				outelf_add(oe, ar);
 		}
-		if (name[0] == '/' && name[1] == '/' && name[2] == ' ')
-			outelf_add(oe, ar);
 		ar += size;
+	}
+	if (found) {
+		printf("(re-read lib %d)\n", ++count);
+		found = 0;
+		ar = beg;
+		goto again;
 	}
 }
 
@@ -715,6 +843,10 @@ static long filesize(int fd)
 static char *fileread(char *path)
 {
 	int fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "neatld: cannot open %s\n", path);
+		return NULL;
+	}
 	int size = filesize(fd);
 	char *buf = malloc(size);
 	read(fd, buf, size);
@@ -789,7 +921,7 @@ int main(int argc, char **argv)
 	struct outelf oe;
 	char *mem[MAXFILES];
 	int nmem = 0;
-	int fd;
+	int fd, multidefs;
 	int i = 0;
 	if (argc < 2)
 		die("neatld: no object given!");
@@ -849,12 +981,19 @@ int main(int argc, char **argv)
 		}
 	}
 	outelf_link(&oe);
-	fd = open(out, O_WRONLY | O_TRUNC | O_CREAT, 0700);
-	if (fd < 0)
-		die("neatld: failed to create the output!");
-	outelf_write(&oe, fd);
-	close(fd);
+
+	if (undefs)
+		fprintf(stderr, "%d undefined symbols\n", undefs);
+	multidefs = outelf_multidef(&oe);
+
+	if (!multidefs && !undefs) {
+		fd = open(out, O_WRONLY | O_TRUNC | O_CREAT, 0700);
+		if (fd < 0)
+			die("neatld: failed to create the output!");
+		outelf_write(&oe, fd);
+		close(fd);
+	}
 	for (i = 0; i < nmem; i++)
 		free(mem[i]);
-	return 0;
+	return multidefs || undefs;
 }
