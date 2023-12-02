@@ -1,4 +1,4 @@
-# Neatcc top-level Makefile
+# NCC top-level Makefile
 
 # output architecture: x64, x86, arm
 OUT = x64
@@ -9,17 +9,13 @@ BASE = $(PWD)
 all: help
 
 help:
-	@echo "Neatcc top-level makefile"
+	@echo "NCC top-level makefile"
 	@echo
 	@echo "   neat        Compile the programs"
 	@echo "   boot        Compile neatcc using itself"
 	@echo "   test        Run compiler tests"
-	@echo "   pull        Update git repositories"
 	@echo "   clean       Remove the generated files"
 	@echo
-
-pull:
-	git pull
 
 neat:
 	@cd ldelf && $(MAKE)
@@ -29,12 +25,10 @@ neat:
 	@cd neatlibc && $(MAKE) OUT=$(OUT) CC=../neatcc/ncc
 	# setting up neatrun/neatcc
 	@cd neatrun && $(MAKE) OUT=$(OUT) NCC=$(BASE)/neatcc/ncc \
-		NLD=$(BASE)/neatld/nld NLC=$(BASE)/neatlibc clean all
+		NLD=$(BASE)/neatld/nld NLC=$(BASE)/neatlibc all
 	# compiling the rest
-	#@cd neatas && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT)
 	@cd neatas && $(MAKE) OUT=$(OUT)
-	@cd neatdbg && $(MAKE) CC=../neatrun/neatcc OUT=$(OUT)
-	#@cd neatdbg && $(MAKE) OUT=$(OUT)
+	@cd neatdbg && $(MAKE) OUT=$(OUT)
 	# compiling demos
 	@cd demo && $(MAKE)
 
