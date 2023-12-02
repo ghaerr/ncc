@@ -2,7 +2,7 @@
 
 int main(void)
 {
-	//printf("NEATCC!\n");
-	write(1, "NEATCC!\n", 8);
+	//printf("NEATCC DEMO!\n");
+	write(1, "NEATCC DEMO!\n", 13);
 	return 0;
 }

@@ -23,7 +23,7 @@ all: ldelf
 	$(CC) -c $(CFLAGS) $<
 
 ldelf: $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDFLAGS)
+	$(CC) -o $@ $(LDFLAGS) $(OBJS)
 
 clean:
 	rm -f *.o ldelf

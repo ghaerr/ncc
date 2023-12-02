@@ -34,7 +34,8 @@ int main(int argc, char *argv[], char *envp[])
 	int ldargc = 0;			/* number of neatld options */
 	int nold = 0;			/* compile only */
 	int i;
-	display("NEATCC ARGS: ", argv);
+
+	/*display("NEATCC ARGS: ", argv);*/
 	if (argc < 2)
 		die("neatcc: ncc/nld wrapper\n");
 	/* looking for options that prevent linking + initialize opt[] and optarg[] */

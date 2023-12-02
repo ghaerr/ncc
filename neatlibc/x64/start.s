@@ -1,7 +1,7 @@
 ;default rel            ; default generate rip-relative code
 
         extern main
-        extern __neatlibc_exit
+        ;extern __neatlibc_exit
         extern _exit
         global _start:function
 _start:

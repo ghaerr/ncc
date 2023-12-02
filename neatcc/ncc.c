@@ -1685,9 +1685,9 @@ int main(int argc, char *argv[])
 	int ofd = 1;
 	int cpp = 0;
 	int i;
-    printf("NCC ARGS: ");
+    /*printf("NCC ARGS: ");
     for (i=0; i<argc; i++) printf("%s ", argv[i]);
-    printf("\n");
+    printf("\n");*/
 	compat_macros();
 	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
 		if (argv[i][1] == 'I')

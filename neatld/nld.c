@@ -25,8 +25,8 @@
 #include <unistd.h>
 #include <stdarg.h>
 
-//#define DEBUG(...)
-#define DEBUG		debug
+#define DEBUG(...)
+//#define DEBUG		debug
 
 #define I_CS		0
 #define I_DS		1
@@ -372,21 +372,21 @@ static void outelf_common(struct outelf *oe)
 	for (i = 0; i < oe->nobjs; i++) {
 		struct obj *obj = &oe->objs[i];
 		for (j = 0; j < obj->nsyms; j++) {
-			Elf_Sym *sym = &obj->syms[j];
+			/*Elf_Sym *sym = &obj->syms[j];*/
 			if (obj->syms[j].st_shndx == SHN_COMMON) {
-				printf("COMM %s st_size %ld st_value %ld\n",
+				/*printf("COMM %s st_size %ld st_value %ld\n",
 					obj->symstr + sym->st_name, (long)sym->st_size,
-					(long)sym->st_value);
+					(long)sym->st_value);*/
 				alloc_common(oe, &obj->syms[j]);
 			} else {
-				int type = ELF_ST_TYPE(sym->st_info);
+				/*int type = ELF_ST_TYPE(sym->st_info);
 				Elf_Shdr *shdr = &obj->shdr[sym->st_shndx];
 				if (type == STT_OBJECT && shdr->sh_type == SHT_NOBITS) {
 					DEBUG("BSS %s st_size %ld st_value %ld st_shndx %d\n",
 						obj->symstr + sym->st_name,
 						(long)sym->st_size, (long)sym->st_value,
 						sym->st_shndx);
-				}
+				}*/
 			}
 		}
 	}
