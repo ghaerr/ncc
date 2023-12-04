@@ -5,6 +5,8 @@ OUT = x64
 CC = cc
 
 BASE = $(PWD)
+LOADER = $(BASE)/ldelf/ldelf
+export LOADER
 
 all: help
 
@@ -12,6 +14,7 @@ help:
 	@echo "NCC top-level makefile"
 	@echo
 	@echo "   neat        Compile the programs"
+	@echo "   sash        Compile and run standalone shell"
 	@echo "   boot        Compile neatcc using itself"
 	@echo "   test        Run compiler tests"
 	@echo "   clean       Remove the generated files"
@@ -29,7 +32,8 @@ neat:
 	# compiling the rest
 	@cd neatas && $(MAKE) OUT=$(OUT)
 	@cd neatdbg && $(MAKE) OUT=$(OUT)
-	# compiling demos
+	# compiling demos and sash
+	@cd sash && $(MAKE)
 	@cd demo && $(MAKE)
 
 boot:
@@ -60,7 +64,11 @@ boot:
 	@cd neatdbg && $(MAKE) CC="../ldelf/ldelf ../neatrun/neatcc" OUT=$(OUT) clean all
 	@echo DONE
 
-.PHONY: test
+.PHONY: sash test
+sash:
+	@cd sash && $(MAKE)
+	$(LOADER) sash/sash
+
 test:
 	@cd test && $(MAKE)
 
@@ -72,5 +80,6 @@ clean:
 	@cd neatrun && $(MAKE) clean
 	@cd neatdbg && $(MAKE) clean
 	@cd ldelf && $(MAKE) clean
+	@cd sash && $(MAKE) clean
 	@cd demo && $(MAKE) clean
 	@cd test && $(MAKE) clean

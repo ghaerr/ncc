@@ -1,6 +1,5 @@
 CC = ../neatrun/neatcc
 LD = ../neatld/nld
-LOADER = ../ldelf/ldelf
 
 CFLAGS = -Wall -O2
 LDFLAGS = -p
