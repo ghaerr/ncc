@@ -30,6 +30,12 @@ struct tm *localtime(time_t *timep);
 struct tm *gmtime(time_t *timep);
 
 extern long timezone;
+extern int _tz_is_set;
 void tzset(void);
+
+#define __isleap(year)  \
+  ((year) % 4 == 0 && ((year) % 100 != 0 || (year) % 400 == 0))
+void __tm_conv(struct tm *tmbuf, const time_t *timep, time_t offset);
+void __asctime(char *buffer, const struct tm *ptm);
 
 #endif

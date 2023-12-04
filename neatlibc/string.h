@@ -24,3 +24,6 @@ char *strdup(const char *s);
 #define memchr(s, c, n)		__memchr_c(s, c, n)
 
 void *__memchr_c(void *s, int c, long n);
+
+/* C versions */
+char *strncat(char *d, char *s, size_t n);

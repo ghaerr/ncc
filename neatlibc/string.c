@@ -22,3 +22,16 @@ void *__memchr_c(void *src, int c, long n)
 		s++, n--;
 	return n ? (void *) s : 0;
 }
+
+/* based on musl libc */
+char *strncat(char *d, char *s, size_t n)
+{
+	char *a = d;
+	d += strlen(d);
+	while (n && *s) {
+        n--;
+        *d++ = *s++;
+	}
+	*d++ = 0;
+	return a;
+}

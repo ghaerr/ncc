@@ -21,6 +21,8 @@ done:
         ret
 
 global fork:function
+global vfork:function
+vfork:                  ; vfork - FIXME actually fork
 fork:
 	mov	rax,0x2000002   ; fork
 	clc
@@ -133,10 +135,10 @@ getuid:
 	mov	eax, 24
 	jmp	__syscall
 
-;global utime:function
-;utime:
-	;mov	eax, 132
-	;jmp	__syscall
+global utimes:function
+utimes:
+	mov	eax, 138
+	jmp	__syscall
 
 global access:function
 access:
@@ -326,4 +328,24 @@ truncate:
 global ftruncate:function
 ftruncate:
 	mov	eax, 201
+	jmp	__syscall
+
+global rename:function
+rename:
+	mov	eax, 128
+	jmp	__syscall
+
+global umask:function
+umask:
+	mov	eax, 60
+	jmp	__syscall
+
+global symlink:function
+symlink:
+	mov	eax, 57
+	jmp	__syscall
+
+global readlink:function
+readlink:
+	mov	eax, 58
 	jmp	__syscall

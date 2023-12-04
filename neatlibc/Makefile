@@ -21,12 +21,13 @@ all: start.o libc.a
 %.o: %.s
 	$(AS) $^ >/dev/null
 %.o: %.c
-	$(CC) -c $(CFLAGS) $^
+	$(CC) -c -o $@ $(CFLAGS) $^
 
 SSRC = $(filter-out $(OUT)/start.o $(wildcard $(OUT)/syscall*.s), $(wildcard $(OUT)/*.s))
 SSRC += $(OUT)/syscall-$(shell uname).o
 SOBJS = $(patsubst %.s,%.o,$(SSRC))
 COBJS = $(patsubst %.c,%.o,$(wildcard *.c))
+COBJS += $(patsubst %.c,%.o,$(wildcard elks/*.c))
 OBJS = $(COBJS) $(SOBJS)
 
 start.o: $(OUT)/start.o
@@ -36,4 +37,4 @@ libc.a: $(OBJS)
 	$(AR) rcs $@ `lorder $(OBJS) | tsort -q`
 
 clean:
-	rm -f *.o *.a x86/*.o arm/*.o x64/*.o
+	rm -f *.o *.a elks/*.o x86/*.o arm/*.o x64/*.o

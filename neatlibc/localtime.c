@@ -5,6 +5,7 @@
 #define isleap(y)	(!((y) % 4) && ((y) % 100) || !((y) % 400))
 #define SPD		(24 * 60 * 60)
 
+int _tz_is_set;
 long timezone;
 
 void tzset(void)
@@ -12,6 +13,7 @@ void tzset(void)
 	struct timezone tz;
 	gettimeofday(0, &tz);
 	timezone = tz.tz_minuteswest * 60;
+    _tz_is_set = 1;
 }
 
 static void tp2tm(struct tm *tm, time_t t)

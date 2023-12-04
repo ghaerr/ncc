@@ -48,9 +48,9 @@ int execve(char *path, char *argv[], char *envp[])
 int execle(char *path, ...)
 {
 	va_list ap;
-	char *argv[EXECARGS];
 	char **envp;
 	int argc = 0;
+	char *argv[EXECARGS];
 	va_start(ap, path);
 	while (argc + 1 < EXECARGS && (argv[argc] = va_arg(ap, char *)))
 		argc++;
@@ -58,6 +58,20 @@ int execle(char *path, ...)
 	va_end(ap);
 	argv[argc] = NULL;
 	execve(path, argv, envp);
+	return -1;
+}
+
+int execl(char *path, ...)
+{
+	va_list ap;
+	int argc = 0;
+	char *argv[EXECARGS];
+	va_start(ap, path);
+	while (argc + 1 < EXECARGS && (argv[argc] = va_arg(ap, char *)))
+		argc++;
+	va_end(ap);
+	argv[argc] = NULL;
+	execve(path, argv, environ);
 	return -1;
 }
 

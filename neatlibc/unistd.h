@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <sys/types.h>
 
 /* access() flags */
 #define R_OK		4
@@ -28,10 +29,12 @@ int dup(int fd);
 int dup2(int fd, int fd2);
 
 int fork(void);
+int vfork(void);        /* FIXME same as fork */
 int getpid(void);
 int getppid(void);
 
 int execve(char *path, char *argv[], char *envp[]);
+int execl(char *path, ...);
 int execle(char *path, ...);
 int execvp(char *file, char *argv[]);
 int execv(char *path, char *argv[]);
@@ -44,3 +47,6 @@ int sleep(int n);
 #define STDIN_FILENO	0
 #define STDOUT_FILENO	1
 #define STDERR_FILENO	2
+
+int symlink(char *path1, char *path2);
+ssize_t readlink(char *path, char *buf, size_t bufsize);

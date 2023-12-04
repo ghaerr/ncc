@@ -9,3 +9,7 @@ struct timezone {
 };
 
 int gettimeofday(struct timeval *tv, struct timezone *tz);
+
+#ifdef __APPLE__
+int utimes(char *path, struct timeval times[2]);
+#endif

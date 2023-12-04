@@ -3,6 +3,7 @@
 #define EOF		(-1)
 #define putc(c, fp)	(fputc(c, fp))
 #define getc(fp)	(fgetc(fp))
+#define BUFSIZ		(1024)
 
 typedef struct {
 	int fd;
@@ -18,6 +19,11 @@ typedef struct {
 extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
+
+#define ferror(fp)      (0)     /* NYI */
+#define feof(fp)        (0)     /* NYI */
+#define clearerr(fp)    (0)     /* NYI */
+#define fileno(fp)      ((fp)->fd)
 
 FILE *fopen(char *path, char *mode);
 int fclose(FILE *fp);
@@ -50,3 +56,5 @@ long fwrite(void *s, long sz, long n, FILE *fp);
 long fread(void *s, long sz, long n, FILE *fp);
 
 void perror(char *s);
+
+int rename(char *old, char *new);
