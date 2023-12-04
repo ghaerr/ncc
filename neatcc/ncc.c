@@ -1343,7 +1343,7 @@ static void localdef(long data, struct name *name, unsigned flags)
 		return;
 	}
 	if (flags & F_STATIC) {
-		sprintf(name->elfname, "__neatcc.%s.%s", func_name, name->name);
+		sprintf(name->elfname, "%s.%s", func_name, name->name);
 		globaldef(data, name, flags);
 		return;
 	}
