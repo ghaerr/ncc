@@ -10,20 +10,20 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mount.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <pwd.h>
-#include <grp.h>
 #include <utime.h>
 #include <errno.h>
-
+#ifndef __neatcc__
+#include <sys/mount.h>
+#include <grp.h>
+#endif
 
 #ifdef CMD_ECHO
 void
-do_echo(argc, argv)
-	char	**argv;
+do_echo(int argc, char **argv)
 {
 	BOOL	first;
 
@@ -40,8 +40,7 @@ do_echo(argc, argv)
 
 #ifdef CMD_PWD
 void
-do_pwd(argc, argv)
-	char	**argv;
+do_pwd(int argc, char **argv)
 {
 	char	buf[PATHLEN];
 
@@ -56,8 +55,7 @@ do_pwd(argc, argv)
 #endif /* CMD_PWD */
 
 void
-do_cd(argc, argv)
-	char	**argv;
+do_cd(int argc, char **argv)
 {
 	char	*path;
 
@@ -77,8 +75,7 @@ do_cd(argc, argv)
 
 #ifdef CMD_MKDIR
 void
-do_mkdir(argc, argv)
-	char	**argv;
+do_mkdir(int argc, char **argv)
 {
 	while (argc-- > 1) {
 		if (mkdir(argv[1], 0777) < 0)
@@ -90,8 +87,7 @@ do_mkdir(argc, argv)
 
 #ifdef CMD_MKNOD
 void
-do_mknod(argc, argv)
-	char	**argv;
+do_mknod(int argc, char **argv)
 {
 	char	*cp;
 	int	mode;
@@ -136,8 +132,7 @@ do_mknod(argc, argv)
 
 #ifdef CMD_RMDIR
 void
-do_rmdir(argc, argv)
-	char	**argv;
+do_rmdir(int argc, char **argv)
 {
 	while (argc-- > 1) {
 		if (rmdir(argv[1]) < 0)
@@ -149,8 +144,7 @@ do_rmdir(argc, argv)
 
 #ifdef CMD_SYNC
 void
-do_sync(argc, argv)
-	char	**argv;
+do_sync(int argc, char **argv)
 {
 	sync();
 }
@@ -159,8 +153,7 @@ do_sync(argc, argv)
 
 #ifdef CMD_RM
 void
-do_rm(argc, argv)
-	char	**argv;
+do_rm(int argc, char **argv)
 {
 	struct stat sbuf;
 
@@ -176,8 +169,7 @@ do_rm(argc, argv)
 
 #ifdef CMD_CHMOD
 void
-do_chmod(argc, argv)
-	char	**argv;
+do_chmod(int argc, char **argv)
 {
 	char	*cp;
 	int	mode;
@@ -205,8 +197,7 @@ do_chmod(argc, argv)
 
 #ifdef CMD_CHOWN
 void
-do_chown(argc, argv)
-	char	**argv;
+do_chown(int argc, char **argv)
 {
 	char		*cp;
 	int		uid;
@@ -247,8 +238,7 @@ do_chown(argc, argv)
 
 #ifdef CMD_CHGRP
 void
-do_chgrp(argc, argv)
-	char	**argv;
+do_chgrp(int argc, char **argv)
 {
 	char		*cp;
 	int		gid;
@@ -289,8 +279,7 @@ do_chgrp(argc, argv)
 
 #ifdef CMD_TOUCH
 void
-do_touch(argc, argv)
-	char	**argv;
+do_touch(int argc, char **argv)
 {
 	char		*name;
 	int		fd;
@@ -316,8 +305,7 @@ do_touch(argc, argv)
 
 #ifdef CMD_MV
 void
-do_mv(argc, argv)
-	char	**argv;
+do_mv(int argc, char **argv)
 {
 	int	dirflag;
 	char	*srcname;
@@ -363,8 +351,7 @@ do_mv(argc, argv)
 
 #ifdef CMD_LN
 void
-do_ln(argc, argv)
-	char	**argv;
+do_ln(int argc, char **argv)
 {
 	int	dirflag;
 	char	*srcname;
@@ -423,8 +410,7 @@ do_ln(argc, argv)
 
 #ifdef CMD_CP
 void
-do_cp(argc, argv)
-	char	**argv;
+do_cp(int argc, char **argv)
 {
 	BOOL	dirflag;
 	char	*srcname;
@@ -533,8 +519,7 @@ do_mount(int argc, char **argv)
 
 #ifdef CMD_MOUNT
 void
-do_umount(argc, argv)
-	char	**argv;
+do_umount(int argc, char **argv)
 {
 	if (argc != 2) {
 		fprintf(stderr, "Usage: umount <device>|<directory>\n");
@@ -547,8 +532,7 @@ do_umount(argc, argv)
 
 #ifdef CMD_CMP
 void
-do_cmp(argc, argv)
-	char	**argv;
+do_cmp(int argc, char **argv)
 {
 	int		fd1;
 	int		fd2;
@@ -651,8 +635,7 @@ closefiles:
 
 #ifdef CMD_MORE
 void
-do_more(argc, argv)
-	char	**argv;
+do_more(int argc, char **argv)
 {
 	FILE	*fp;
 	char	*name;
@@ -747,16 +730,14 @@ do_more(argc, argv)
 
 
 void
-do_exit(argc, argv)
-	char	**argv;
+do_exit(int argc, char **argv)
 {
 	exit(0);
 }
 
 #ifdef CMD_SETENV
 void
-do_setenv(argc, argv)
-	char	**argv;
+do_setenv(int argc, char **argv)
 {
 	char	buf[CMDLEN];
 
@@ -773,8 +754,7 @@ do_setenv(argc, argv)
 
 #ifdef CMD_PRINTENV
 void
-do_printenv(argc, argv)
-	char	**argv;
+do_printenv(int argc, char **argv)
 {
 	char		**env = environ;
 	int		len;
@@ -800,8 +780,7 @@ do_printenv(argc, argv)
 
 #ifdef CMD_UMASK
 void
-do_umask(argc, argv)
-	char	**argv;
+do_umask(int argc, char **argv)
 {
 	char	*cp;
 	int	mask;
@@ -829,8 +808,7 @@ do_umask(argc, argv)
 
 #ifdef CMD_KILL
 void
-do_kill(argc, argv)
-	char	**argv;
+do_kill(int argc, char **argv)
 {
 	char	*cp;
 	int	sig;

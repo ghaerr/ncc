@@ -134,8 +134,7 @@ timestring(time_t t)
  * Nonexistant files return FALSE.
  */
 BOOL
-isadir(name)
-	char	*name;
+isadir(char *name)
 {
 	struct	stat	statbuf;
 
@@ -154,10 +153,7 @@ isadir(name)
  * be set.)
  */
 BOOL
-copyfile(srcname, destname, setmodes)
-	char	*srcname;
-	char	*destname;
-	BOOL	setmodes;
+copyfile(char *srcname, char *destname, BOOL setmodes)
 {
 	int		rfd;
 	int		wfd;
@@ -259,9 +255,7 @@ error_exit:
  * The built path is in a static area, and is overwritten for each call.
  */
 char *
-buildname(dirname, filename)
-	char	*dirname;
-	char	*filename;
+buildname(char *dirname, char *filename)
 {
 	char		*cp;
 	static	char	buf[PATHLEN];
@@ -292,10 +286,7 @@ buildname(dirname, filename)
  * matched or too many filenames matched (with an error output).
  */
 int
-expandwildcards(name, maxargc, retargv)
-	char	*name;
-	int	maxargc;
-	char	*retargv[];
+expandwildcards(char *name, int maxargc, char *retargv[])
 {
 	char	*last;
 	char	*cp1, *cp2, *cp3;
@@ -399,9 +390,7 @@ expandwildcards(name, maxargc, retargv)
  * Sort routine for list of filenames.
  */
 int
-namesort(p1, p2)
-	char	**p1;
-	char	**p2;
+namesort(char **p1, char **p2)
 {
 	return strcmp(*p1, *p2);
 }
@@ -418,9 +407,7 @@ namesort(p1, p2)
  *  Adapted from code written by Ingo Wilken.
  */
 BOOL
-match(text, pattern)
-	char	*text;
-	char	*pattern;
+match(char *text, char *pattern)
 {
 	char	*retrypat;
 	char	*retrytxt;
@@ -498,10 +485,7 @@ match(text, pattern)
  * or FALSE on an error with a message already output.
  */
 BOOL
-makeargs(cmd, argcptr, argvptr)
-	char	*cmd;
-	int	*argcptr;
-	char	***argvptr;
+makeargs(char *cmd, int *argcptr, char ***argvptr)
 {
 	char		*cp;
 	int		argc;
@@ -605,7 +589,7 @@ getchunk(size)
  * call to this routine.
  */
 void
-freechunks()
+freechunks(void)
 {
 	CHUNK	*chunk;
 

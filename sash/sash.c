@@ -12,7 +12,9 @@
 #include <signal.h>
 #include <errno.h>
 #include <pwd.h>
+#ifndef __neatcc__
 #include <grp.h>
+#endif
 
 typedef struct {
     char    *name;
@@ -208,7 +210,9 @@ int main(int argc, char **argv)
 {
 	char	*cp;
 
+#ifndef __neatcc__
 	signal(SIGINT, catchint);
+#endif
 	signal(SIGQUIT, catchquit);
 	signal(SIGTSTP, SIG_IGN);
 
@@ -216,7 +220,11 @@ int main(int argc, char **argv)
 	if ((cp = strrchr(argv[0], '/')) != 0)
 		cp++;
 	else cp = argv[0];
+#ifdef __neatcc__
+	isbinshell = 1;
+#else
 	isbinshell = !strcmp(cp, "sh");
+#endif
 
 #ifdef CMD_SOURCE
 	sourcecfg("/etc", CFGFILE);
@@ -232,8 +240,10 @@ int main(int argc, char **argv)
 		prompt = "  ";
 	strcpy(prompt, getuid()? "$ ": "# ");
 
+#ifndef __neatcc__
 	if (getenv("PATH") == NULL)
 		putenv("PATH=/bin");
+#endif
 
 #ifdef CMD_HISTORY
 	init_hist();
@@ -598,9 +608,10 @@ runcmd(char *cmd, int argc, char **argv)
 			status = 0;
 			intcrlf = FALSE;
 
-			while ((ret = waitpid(pid, &status, 0)) != pid)
+			while ((ret = waitpid(pid, &status, 0)) != pid) {
+				if (ret < 0) break;
 				continue;
-
+			}
 			intcrlf = TRUE;
 			if ((status & 0xff) == 0)
 				return;
@@ -627,12 +638,14 @@ runcmd(char *cmd, int argc, char **argv)
 
 	execvp(argv[0], argv);
 
+#ifndef __neatcc__
 	/*
 	 * If file has access but didn't execute, guess it's a shell script
 	 * and run 'sh -c cmd'.
 	 */
 	if (errno == ENOEXEC && !cflag)
 		execl("/bin/sh", "sh", "-c", cmd, (char*)0);
+#endif
 
 	perror(argv[0]);	/* Usually 'No such file or directory'*/
 	exit(1);
@@ -872,61 +885,6 @@ catchquit()
 
 	if (intcrlf)
 		write(STDOUT, "\n", 1);
-}
-
-/* replacement fread to fix fgets not returning ferror/errno properly on SIGINT*/
-#include <sys/linksym.h>
-size_t fread(void *buf, size_t size, size_t nelm, FILE *fp)
-{
-   int len, v;
-   size_t bytes, got = 0;
-   __LINK_SYMBOL(__stdio_init);
-
-   v = fp->mode;
-
-   /* Want to do this to bring the file pointer up to date */
-   if (v & __MODE_WRITING)
-      fflush(fp);
-
-   /* Can't read or there's been an EOF or error then return zero */
-   if ((v & (__MODE_READ | __MODE_EOF | __MODE_ERR)) != __MODE_READ)
-      return 0;
-
-   /* This could be long, doesn't seem much point tho */
-   bytes = size * nelm;
-
-   len = fp->bufread - fp->bufpos;
-   if (len >= bytes)            /* Enough buffered */
-   {
-      memcpy(buf, fp->bufpos, bytes);
-      fp->bufpos += bytes;
-      return nelm;
-   }
-   else if (len > 0)            /* Some buffered */
-   {
-      memcpy(buf, fp->bufpos, len);
-      fp->bufpos += len;
-      got = len;
-   }
-
-   /* Need more; do it with a direct read */
-   len = read(fp->fd, (char *)buf + got, bytes - got);
-   /* Possibly for now _or_ later */
-#if 1	/* Fixes stdio when SIGINT received*/
-   if (intflag) {
-      len = -1;
-      errno = EINTR;
-   }
-#endif
-   if (len < 0)
-   {
-      fp->mode |= __MODE_ERR;
-      len = 0;
-   }
-   else if (len == 0)
-      fp->mode |= __MODE_EOF;
-
-   return (got + len) / size;
 }
 
 /* END CODE */

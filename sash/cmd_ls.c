@@ -14,9 +14,10 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <pwd.h>
-#include <grp.h>
 #include <time.h>
-
+#ifndef __neatcc__
+#include <grp.h>
+#endif
 
 #define	LISTSIZE	256
 
@@ -225,6 +226,7 @@ lsfile(name, statbuf, flags)
 		sprintf(cp, "%3d ", statbuf->st_nlink);
 		cp += strlen(cp);
 
+#ifndef __neatcc__
 		if (!useridknown || (statbuf->st_uid != userid)) {
 			pwd = getpwuid(statbuf->st_uid);
 			if (pwd)
@@ -250,12 +252,13 @@ lsfile(name, statbuf, flags)
 
 		sprintf(cp, "%-8s ", groupname);
 		cp += strlen(cp);
+#endif
 
 		if (S_ISBLK(statbuf->st_mode) || S_ISCHR(statbuf->st_mode))
 			sprintf(cp, "%3d, %3d ", statbuf->st_rdev >> 8,
 				statbuf->st_rdev & 0xff);
 		else
-			sprintf(cp, "%8ld ", statbuf->st_size);
+			sprintf(cp, "%8lld ", statbuf->st_size);
 		cp += strlen(cp);
 
 		sprintf(cp, " %-12s ", timestring(statbuf->st_mtime));

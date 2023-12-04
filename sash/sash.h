@@ -9,14 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <malloc.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
 #include "config.h"
 
 #define	PATHLEN		256	
@@ -36,12 +34,14 @@
 #define	isdecimal(ch)	(((ch) >= '0') && ((ch) <= '9'))
 #define	isoctal(ch)	(((ch) >= '0') && ((ch) <= '7'))
 
+extern char **environ;
 
 typedef	int	BOOL;
 
+#ifndef FALSE
 #define	FALSE	((BOOL) 0)
 #define	TRUE	((BOOL) 1)
-
+#endif
 
 extern	void	do_alias(), do_cd(), do_exec(), do_exit(), do_prompt();
 extern	void	do_source(), do_umask(), do_unalias(), do_help(), do_ln();
