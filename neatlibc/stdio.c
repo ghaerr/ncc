@@ -156,9 +156,14 @@ static void oint(FILE *fp, unsigned long n, int base,
 	if (bytes == 4)
 		n &= 0xffffffff;
 	d = digits(n, base);
+    if (bytes == 8 && d > 8) d++;
 	for (i = 0; i < d; i++) {
-		s[d - i - 1] = ucase ? digs_uc[n % base] : digs[n % base];
-		n /= base;
+        if (bytes == 8 && i == 8) {
+            s[d - i - 1] = '_';
+        } else {
+		    s[d - i - 1] = ucase ? digs_uc[n % base] : digs[n % base];
+		    n /= base;
+        }
 	}
 	s[d] = '\0';
 	fill = (flags & FMT_ZERO) ? '0' : ' ';
