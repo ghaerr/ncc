@@ -198,6 +198,12 @@ __attribute__((__noreturn__)) static void Exit(long rc) {
   __builtin_unreachable();
 }
 
+static unsigned long StrLen(const char *s) {
+  unsigned long n = 0;
+  while (*s++) ++n;
+  return n;
+}
+
 static int StrCmp(const char *l, const char *r) {
   unsigned long i = 0;
   while (l[i] == r[i] && r[i]) ++i;

@@ -171,10 +171,7 @@ static void run(int argc, char** argv, int readfd, int writefd)
     Elf64_Addr base = 0x400000;
     Elf64_Ehdr *ehdr;
     uint64_t entry, phnum, phentsize, phaddr;
-    uint64_t auxv[8 * 2];
     char* stack;
-    char** envp;
-    int envc;
     void** sp;
 
     (void)readfd;
@@ -192,8 +189,13 @@ static void run(int argc, char** argv, int readfd, int writefd)
     sp = (void**) &stack[STACKLEN];
 	DEBUG1("stack start ", (long)sp);
 	DEBUG1("stack end   ", (long)stack);
-    *--sp = NULL; // End of stack
 
+#if 0       /* create auxv, copy but don't rewrite argv/envp addresses */
+    char** envp;
+    int envc;
+    uint64_t auxv[8 * 2];
+
+    *--sp = NULL; // End of stack
     if(argc & 1)
         *--sp = NULL; // Keep stack aligned
     auxv[ 0] = 0x06; auxv[ 1] = 0x1000;    // AT_PAGESZ
@@ -217,6 +219,42 @@ static void run(int argc, char** argv, int readfd, int writefd)
     *--sp = NULL; // End of argv
     sp -= argc; MemMove(sp, argv, argc * 8);
     *(size_t*) --sp = argc;
+#else        /* copy argv/envp addresses into 32-bit address space */
+    int n, bytes = 0;
+    uint64_t *lp = (uint64_t *)argv;      /* skip argc */
+    while (*lp)
+        bytes += StrLen((char *)*lp++) + 1;
+    lp++;                         /* end argv */
+    while (*lp)
+        bytes += StrLen((char *)*lp++) + 1;
+    lp += 2;                      /* end envp, null auxv */
+    bytes += (char *)lp - (char *)argv + sizeof(uint64_t);
+    bytes = (bytes + 15) & ~15;
+    char *p = (char *)(stack + STACKLEN);
+    uint64_t *sp2 = (void *)(stack + STACKLEN - bytes);
+
+    *sp2++ = argc;               /* argc */
+    while (*argv) {
+        n = StrLen(*argv) + 1;
+        p -= n;
+        MemMove(p, *argv, n);
+        *sp2++ = (uint64_t)p;
+        argv++;
+    }
+    *sp2++ = (uint64_t)*argv++;  /* argv null */
+
+    while (*argv) {
+        n = StrLen(*argv) + 1;
+        p -= n;
+        MemMove(p, *argv, n);
+        *sp2++ = (uint64_t)p;
+        argv++;
+    }
+    *sp2++ = 0;                   /* envp null */
+    *sp2++ = 0;                   /* null aux */
+    sp = (void *)(stack + STACKLEN - bytes);
+    DEBUG1("ARGS  ", bytes);
+#endif
 
 	DEBUG1("launch      ", entry);
     Launch(0, entry, sp, 0);

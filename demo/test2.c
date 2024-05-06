@@ -54,12 +54,9 @@ int main(int argc, char **argv, char **envp)
     printf("%s\n", "hello world!!");
     printf("main = %lx\n", main);
     ttyname(1);
-    for (i=0; i < argc; i++)
-        printf("'%lx,%s' ", argv[i], argv[i]);
-        //printf("'%lx' ", argv + i);
-    printf("\n");
     for (i=0; i<32; i++) printf("malloc %lx\n", malloc(i & 1? 2048: 8192));
-    printf("env: ");
+    for (i=0; i < argc; i++)
+        printf("'%s' (=%lx)\n", argv[i], argv[i]);
     while (*envp) {
         printf("'%s' (=%lx)\n", *envp, *envp);
         envp++;
