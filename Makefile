@@ -5,7 +5,10 @@ OUT = x64
 CC = cc
 
 BASE = $(PWD)
-LOADER = $(BASE)/ldelf/ldelf
+#LOADER = $(BASE)/ldelf/ldelf
+#BOOTLDR = ../ldelf/ldelf
+LOADER = $(BASE)/ldelf/load
+BOOTLDR = ../ldelf/load
 export LOADER
 
 all: help
@@ -47,21 +50,21 @@ boot:
 	@cp neatrun/neatcc _neatcc
 	# compiling the programs
 	# 1111111111
-	@cd neatcc && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" clean all
+	@cd neatcc && $(MAKE) OUT=$(OUT) CC="$(BOOTLDR) ../_neatcc" clean all
 	# 2222222222
-	@cd neatld && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" clean all
+	@cd neatld && $(MAKE) OUT=$(OUT) CC="$(BOOTLDR) ../_neatcc" clean all
 	# 3333333333
-	@cd neatlibc && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../neatcc/ncc" clean all
+	@cd neatlibc && $(MAKE) OUT=$(OUT) CC="$(BOOTLDR) ../neatcc/ncc" clean all
 	# setting up neatrun/neatcc
 	# 4444444444
-	@cd neatrun && $(MAKE) OUT=$(OUT) CC="../ldelf/ldelf ../_neatcc" NCC=$(BASE)/neatcc/ncc \
+	@cd neatrun && $(MAKE) OUT=$(OUT) CC="$(BOOTLDR) ../_neatcc" NCC=$(BASE)/neatcc/ncc \
 		NLD=$(BASE)/neatld/nld NLC=$(BASE)/neatlibc clean all
 	@rm _ncc _nld _neatcc
 	# compiling the rest
 	# 5555555555
-	@cd neatas && $(MAKE) CC="../ldelf/ldelf ../neatrun/neatcc" OUT=$(OUT) clean all
+	@cd neatas && $(MAKE) CC="$(BOOTLDR) ../neatrun/neatcc" OUT=$(OUT) clean all
 	# 6666666666
-	@cd neatdbg && $(MAKE) CC="../ldelf/ldelf ../neatrun/neatcc" OUT=$(OUT) clean all
+	@cd neatdbg && $(MAKE) CC="$(BOOTLDR) ../neatrun/neatcc" OUT=$(OUT) clean all
 	@echo DONE
 
 .PHONY: sash test

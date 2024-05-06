@@ -5,7 +5,8 @@ OUT = x64
 PLATFORM=$(shell uname)
 
 # loader path for execve on macOS
-LOADER=$(shell dirname $(shell pwd))/ldelf/ldelf
+#LOADER=$(shell dirname $(shell pwd))/ldelf/ldelf
+LOADER=$(shell dirname $(shell pwd))/ldelf/load
 
 # default assemblers
 ASx64 = nasm -f elf64 -d$(PLATFORM)
