@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-//#include "macros.internal.h"
 
 //	Invokes system call.
 //
@@ -29,7 +28,7 @@
 //	to follow this convention automatically.
 	.section	__TEXT,__text,regular,pure_instructions
 	.p2align	4, 0x90
-    .globl _SystemCall
+	.globl _SystemCall
 _SystemCall:
 	mov	%rcx,%r10
 	mov	16(%rsp),%eax
@@ -38,4 +37,3 @@ _SystemCall:
 	jnc	1f
 	neg	%rax
 1:	ret
-	//.endfn	SystemCall,globl

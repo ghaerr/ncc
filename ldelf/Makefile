@@ -1,4 +1,4 @@
-# ldelf - elf loader
+# elf loaders
 
 CC = cc
 CFLAGS =                                \
@@ -12,22 +12,25 @@ CFLAGS =                                \
 LDFLAGS =                               \
         -static                         \
         -nostdlib                       \
-        -e start                        \
         -pagezero_size 0x100000         \
 
-OBJS = ldelf.o systemcall.o launch.o start.o
-OBJS2 = load.o systemcall.o launch.o start.o
+ifeq ($(shell uname), Darwin)
+LDFLAGS += -e xnustart
+endif
+
+LDELF = ldelf.o systemcall.o launch.o start.o
+LOAD = load.o systemcall.o launch.o start.o
 
 all: ldelf load
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) $<
 
-ldelf: $(OBJS)
-	$(CC) -o $@ $(LDFLAGS) $(OBJS)
+ldelf: $(LDELF)
+	$(CC) -o $@ $(LDFLAGS) $(LDELF)
 
-load: $(OBJS2)
-	$(CC) -o $@ $(LDFLAGS) $(OBJS2)
+load: $(LOAD)
+	$(CC) -o $@ $(LDFLAGS) $(LOAD)
 
 clean:
 	rm -f *.o ldelf load

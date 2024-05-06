@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "ape.h"
 
 /**
  * @fileoverview APE Loader for GNU/Systemd/XNU/FreeBSD/NetBSD/OpenBSD
@@ -972,7 +971,7 @@ __attribute__((__noreturn__)) static void ShowUsage(int os, int fd, int rc) {
   Print(os, fd,
         "NAME\n"
         "\n"
-        "  actually portable executable loader version " APE_VERSION_STR "\n"
+        "  actually portable executable loader version 1.9\n"
         "  copyright 2023 justine alexandra roberts tunney\n"
         "  https://justine.lol/ape.html\n"
         "\n"
@@ -990,8 +989,7 @@ __attribute__((__noreturn__)) static void ShowUsage(int os, int fd, int rc) {
   Exit(rc, os);
 }
 
-EXTERN_C __attribute__((__noreturn__)) void ApeLoader(long di, long *sp,
-                                                      char dl) {
+EXTERN_C __attribute__((__noreturn__)) void Main(long di, long *sp, char dl) {
   int rc, n;
   unsigned i;
   char literally;

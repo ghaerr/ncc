@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-//#include "libc/macros.internal.h"
 
 //	Calls _start() function of loaded program.
 //
@@ -36,7 +35,7 @@
 //	@noreturn
 	.section	__TEXT,__text,regular,pure_instructions
 	.p2align	4, 0x90
-    .globl _Launch
+	.globl _Launch
 _Launch:
 	xor	%r8d,%r8d
 	xor	%r9d,%r9d
@@ -54,4 +53,3 @@ _Launch:
 	xor	%ebx,%ebx
 	xor	%eax,%eax
 	ret
-	//.endfn	Launch,globl

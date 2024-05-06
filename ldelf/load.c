@@ -12,251 +12,17 @@
 #include <signal.h>
 #include <termios.h>
 #include "../neatlibc/elf.h"
+#include "syscalls.c"
 
 #define debug       1
 #define STACKADDR   ((void *)(0x080000000 - STACKLEN))  /* stack from 2G downwards */
 #define STACKLEN    (2048 * 4096)                       /* 8MB stack */
 
-Elf64_Addr search_section(int fd, char* section);
+extern void Launch(void *rdi, long entry, void *sp, int rcx) __attribute__((__noreturn__));
 
-#define SUPPORT_VECTOR      XNU
-#define LINUX   1
-#define XNU     8
-#define OPENBSD 16
-#define FREEBSD 32
-#define NETBSD  64
+static Elf64_Addr search_section(int fd, char* section);
 
-#define SupportsLinux()   (SUPPORT_VECTOR & LINUX)
-#define SupportsXnu()     (SUPPORT_VECTOR & XNU)
-#define SupportsFreebsd() (SUPPORT_VECTOR & FREEBSD)
-#define SupportsOpenbsd() (SUPPORT_VECTOR & OPENBSD)
-#define SupportsNetbsd()  (SUPPORT_VECTOR & NETBSD)
-
-#define IsLinux()   (SupportsLinux() && os == LINUX)
-#define IsXnu()     (SupportsXnu() && os == XNU)
-#define IsFreebsd() (SupportsFreebsd() && os == FREEBSD)
-#define IsOpenbsd() (SupportsOpenbsd() && os == OPENBSD)
-#define IsNetbsd()  (SupportsNetbsd() && os == NETBSD)
-
-#ifdef __aarch64__
-#define IsAarch64() 1
-#else
-#define IsAarch64() 0
-#endif
-
-#define DEBUG(STR)                          \
-  if (debug) {                              \
-    Print(XNU, 2, STR, 0l);                  \
-  }
-
-#define DEBUG1(STR,VAR)                     \
-  if (debug) {                              \
-    char ibuf[32];                          \
-    Utox(ibuf, VAR);                        \
-    Print(XNU, 2, STR, ibuf, "\n", 0l);      \
-  }
-
-void Launch(void *rdi, long entry, void *sp, int rcx) __attribute__((__noreturn__));
-long SystemCall(long, long, long, long, long, long, long, int);
-
-__attribute__((__noinline__)) static long CallSystem(long arg1, long arg2,
-                                                     long arg3, long arg4,
-                                                     long arg5, long arg6,
-                                                     long arg7, int numba,
-                                                     char os) {
-  if (IsXnu()) numba |= 0x2000000;
-  return SystemCall(arg1, arg2, arg3, arg4, arg5, arg6, arg7, numba);
-}
-
-static long Write(int fd, const void *data, unsigned long size, int os) {
-  int numba;
-  if (IsLinux()) {
-    if (IsAarch64()) {
-      numba = 64;
-    } else {
-      numba = 1;
-    }
-  } else {
-    numba = 4;
-  }
-  return CallSystem(fd, (long)data, size, 0, 0, 0, 0, numba, os);
-}
-
-static long Print(int os, int fd, const char *s, ...) {
-  int c;
-  unsigned n;
-  char b[512];
-  __builtin_va_list va;
-  __builtin_va_start(va, s);
-  for (n = 0; s; s = __builtin_va_arg(va, const char *)) {
-    while ((c = *s++)) {
-      if (n < sizeof(b)) {
-        b[n++] = c;
-      }
-    }
-  }
-  __builtin_va_end(va);
-  return Write(fd, b, n, os);
-}
-
-static char *Utox(char p[19], unsigned long x) {
-  int i;
-  if (x) {
-#if 0   /* hex formatting */
-    *p++ = '0';
-    *p++ = 'x';
-    i = (__builtin_clzl(x) ^ (sizeof(long) * 8 - 1)) + 1;
-    i = (i + 3) & -4;
-#else
-    i = 64;
-#endif
-    do {
-      if (i == 32) *p++ = '_';
-      *p++ = "0123456789abcdef"[(x >> (i -= 4)) & 15];
-    } while (i);
-  } else {
-    *p++ = '0';
-  }
-  *p = 0;
-  return p;
-}
-
-__attribute__((__noreturn__)) static void Exit(long rc, int os) {
-  int numba;
-  if (IsLinux()) {
-    if (IsAarch64()) {
-      numba = 94;
-    } else {
-      numba = 60;
-    }
-  } else {
-    numba = 1;
-  }
-  CallSystem(rc, 0, 0, 0, 0, 0, 0, numba, os);
-  __builtin_unreachable();
-}
-
-static int StrCmp(const char *l, const char *r) {
-  unsigned long i = 0;
-  while (l[i] == r[i] && r[i]) ++i;
-  return (l[i] & 255) - (r[i] & 255);
-}
-
-static void Bzero(void *a, unsigned long n) {
-  long z;
-  volatile char *p;
-  char *e;
-  p = (char *)a;
-  e = (char *)p + n;
-  z = 0;
-  while (p + sizeof(z) <= e) {
-    __builtin_memcpy((void *)p, &z, sizeof(z));
-    p += sizeof(z);
-  }
-  while (p < e) {   /* if not volatile, ___bzero called here on -Os */
-    *p++ = 0;
-  }
-}
-
-static void *MemMove(void *a, const void *b, unsigned long n) {
-  long w;
-  char *d;
-  const char *s;
-  unsigned long i;
-  d = (char *)a;
-  s = (const char *)b;
-  if (d > s) {
-    while (n >= sizeof(w)) {
-      n -= sizeof(w);
-      __builtin_memcpy(&w, s + n, sizeof(n));
-      __builtin_memcpy(d + n, &w, sizeof(n));
-    }
-    while (n--) {
-      d[n] = s[n];
-    }
-  } else {
-    i = 0;
-    while (i + sizeof(w) <= n) {
-      __builtin_memcpy(&w, s + i, sizeof(i));
-      __builtin_memcpy(d + i, &w, sizeof(i));
-      i += sizeof(w);
-    }
-    for (; i < n; ++i) {
-      d[i] = s[i];
-    }
-  }
-  return d;
-}
-
-static long Pread(int fd, void *data, unsigned long size, long off, int os) {
-  long numba;
-  if (IsLinux()) {
-    if (IsAarch64()) {
-      numba = 0x043;
-    } else {
-      numba = 0x011;
-    }
-  } else if (IsXnu()) {
-    numba = 0x2000099;
-  } else if (IsFreebsd()) {
-    numba = 0x1db;
-  } else if (IsOpenbsd()) {
-    numba = 0x0a9; /* OpenBSD v7.3+ */
-  } else if (IsNetbsd()) {
-    numba = 0x0ad;
-  } else {
-    __builtin_unreachable();
-  }
-  return SystemCall(fd, (long)data, size, off, off, 0, 0, numba);
-}
-
-static int Open(const char *path, int flags, int mode, int os) {
-  if (IsLinux() && IsAarch64()) {
-    return SystemCall(-100, (long)path, flags, mode, 0, 0, 0, 56);
-  } else {
-    return CallSystem((long)path, flags, mode, 0, 0, 0, 0, IsLinux() ? 2 : 5,
-                      os);
-  }
-}
-
-static int Close(int fd, int os) {
-  int numba;
-  if (IsLinux()) {
-    if (IsAarch64()) {
-      numba = 57;
-    } else {
-      numba = 3;
-    }
-  } else {
-    numba = 6;
-  }
-  return CallSystem(fd, 0, 0, 0, 0, 0, 0, numba, os);
-}
-
-static long Mmap(void *addr, unsigned long size, int prot, int flags, int fd,
-                 long off, int os) {
-  long numba;
-  if (IsLinux()) {
-    if (IsAarch64()) {
-      numba = 222;
-    } else {
-      numba = 9;
-    }
-  } else if (IsXnu()) {
-    numba = 0x2000000 | 197;
-  } else if (IsFreebsd()) {
-    numba = 477;
-  } else if (IsOpenbsd()) {
-    numba = 49; /* OpenBSD v7.3+ */
-  } else if (IsNetbsd()) {
-    numba = 197;
-  } else {
-    __builtin_unreachable();
-  }
-  return SystemCall((long)addr, size, prot, flags, fd, off, off, numba);
-}
-
-
+/* declaring this function static causes call ___bzero */
 Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 {
     int fd;
@@ -266,15 +32,15 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 	long rc;
     static Elf64_Ehdr ehdr;
 
-    if((fd = Open(path, O_RDONLY, 0, XNU)) < 0)
+    if((fd = Open(path, O_RDONLY, 0)) < 0)
     {
-        Print(XNU, 2, "Can't open ", path, "\n", 0);
-        Exit(0, XNU);
+        Print(2, "Can't open ", path, "\n", 0);
+        Exit(0);
     }
-    Pread(fd, &ehdr, sizeof(ehdr), 0, XNU);
+    Pread(fd, &ehdr, sizeof(ehdr), 0);
     phnum = ehdr.e_phnum;
     phdr = alloca(sizeof(*phdr) * phnum);
-    Pread(fd, phdr, sizeof(*phdr) * phnum, ehdr.e_phoff, XNU);
+    Pread(fd, phdr, sizeof(*phdr) * phnum, ehdr.e_phoff);
     bss = search_section(fd, ".bss");
 	DEBUG1("phnum       ", phnum);
 	DEBUG1("bss section ", bss);
@@ -300,12 +66,12 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
         size_t _filesz = (filesz + 0xfff) & ~0xfff;
 
 		//if (filesz == 0) continue;
-        rc = Mmap(rebase + aligned, filesz, prot, MAP_PRIVATE | MAP_FIXED, fd, offset, XNU);
+        rc = Mmap(rebase + aligned, filesz, prot, MAP_PRIVATE | MAP_FIXED, fd, offset);
 		DEBUG1("load mmap   ", rc);
         if(memsz > _filesz)
         {
             void* extra = rebase + aligned + _filesz;
-            rc = Mmap(extra, memsz - _filesz, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0, XNU);
+            rc = Mmap(extra, memsz - _filesz, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0);
 			DEBUG1("zero mmap   ", rc);
 			DEBUG1("     size   ", memsz - _filesz)
         }
@@ -318,11 +84,11 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 			DEBUG1("     size   ", bss_size);
         }
     }
-    Close(fd, XNU);
+    Close(fd);
 	return &ehdr;
 }
 
-Elf64_Addr search_section(int fd, char* section)
+static Elf64_Addr search_section(int fd, char* section)
 {
     Elf64_Ehdr ehdr;
     Elf64_Shdr* shdr;
@@ -330,15 +96,15 @@ Elf64_Addr search_section(int fd, char* section)
     uint16_t shstrndx;
     char* shstrtab;
 
-    Pread(fd, &ehdr, sizeof(ehdr), 0, XNU);
+    Pread(fd, &ehdr, sizeof(ehdr), 0);
 
     shnum = ehdr.e_shnum;
     shdr = alloca(sizeof(*shdr) * shnum);
-    Pread(fd, shdr, sizeof(*shdr) * shnum, ehdr.e_shoff, XNU);
+    Pread(fd, shdr, sizeof(*shdr) * shnum, ehdr.e_shoff);
 
     shstrndx = ehdr.e_shstrndx;
     shstrtab = alloca(shdr[shstrndx].sh_size);
-    Pread(fd, shstrtab, shdr[shstrndx].sh_size, shdr[shstrndx].sh_offset, XNU);
+    Pread(fd, shstrtab, shdr[shstrndx].sh_size, shdr[shstrndx].sh_offset);
 
     for(int i = 0; i < shnum; ++i)
         if(!StrCmp(&shstrtab[shdr[i].sh_name], section))
@@ -349,7 +115,7 @@ Elf64_Addr search_section(int fd, char* section)
     return 0;
 }
 
-#ifdef __linux__
+#if 0
 void* ld_addr()
 {
     FILE* f = fopen("/proc/self/maps", "rb");
@@ -400,7 +166,7 @@ char* search_path(char* cmd)
 #endif
 
 __attribute__((noreturn))
-void run(int argc, char** argv, int readfd, int writefd)
+static void run(int argc, char** argv, int readfd, int writefd)
 {
     Elf64_Addr base = 0x400000;
     Elf64_Ehdr *ehdr;
@@ -420,7 +186,7 @@ void run(int argc, char** argv, int readfd, int writefd)
 	DEBUG1("entry       ", entry);
 
     stack = (char *)Mmap(STACKADDR, STACKLEN, PROT_READ | PROT_WRITE,
-                 MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0, XNU);
+                 MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     sp = (void**) &stack[STACKLEN];
 	DEBUG1("stack start ", (long)sp);
 	DEBUG1("stack end   ", (long)stack);
@@ -444,7 +210,7 @@ void run(int argc, char** argv, int readfd, int writefd)
 
 	DEBUG1("launch      ", entry);
     Launch(0, entry, sp, 0);
-#ifdef __linux__
+#if 0
     if(readfd >= 0)
     {
         dup2(readfd, fileno(stdin));
@@ -468,7 +234,7 @@ void run(int argc, char** argv, int readfd, int writefd)
     __builtin_unreachable();
 }
 
-#ifdef __linux__
+#if 0
 void runline(char* cmd)
 {
     int* argc;
@@ -567,23 +333,17 @@ int main()
 }
 #endif
 
-__attribute__((__noreturn__)) void ApeLoader(long di, long *sp, char dl)
+__attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
 {
-    int argc = *sp;
-    char **argv = (char **)(sp + 1);
-#if 0
-    char **envp = (char **)(sp + 1 + argc + 1);
-    long *auxv = sp + 1 + argc + 1;
-    for (;;) {
-        if (!*auxv++)
-            break;
-    }
-#endif
-    (void)di;
-    (void)dl;
+    int argc;
+    char **argv;
+
+    sp = InitAPE(di, sp, dl);
+    argc = *sp;
+    argv = (char **)(sp + 1);
 
     if (argc > 1)
         run(argc-1, argv+1, 0, 1);
-    else Print(XNU, 2, "Usage: load <program> [args...]\n", 0);
-    Exit(1, XNU);
+    else Print(2, "Usage: load <program> [args...]\n", 0);
+    Exit(1);
 }
