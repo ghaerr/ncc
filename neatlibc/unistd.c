@@ -31,7 +31,6 @@ int execve(char *path, char *argv[], char *envp[])
         char **p = argv, **q = argv2;
         char buf[2];
         if (read(fd, buf, 2) == 2 && buf[0] == 0x7f && buf[1] == 0x45) {
-            close(fd);
             path = LOADER;              //FIXME remove hard path
             printf("+elf %s ", path);
             *q++ = path;
@@ -40,6 +39,7 @@ int execve(char *path, char *argv[], char *envp[])
             printf("\n");
             argv = argv2;
         }
+        close(fd);
     }
 #endif
     return _execve(path, argv, envp);
