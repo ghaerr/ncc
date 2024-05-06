@@ -8,12 +8,11 @@
 
 #define MAP_SHARED	0x01
 #define MAP_PRIVATE	0x02
+#define MAP_FIXED	0x10		/* Interpret addr exactly */
 
 #ifdef __APPLE__
-#define MAP_FIXED       0x10	        /* Interpret addr exactly */
 #define MAP_ANONYMOUS	0x1000          /* don't use a file */
 #else
-#define MAP_FIXED	0x10		/* Interpret addr exactly */
 #define MAP_ANONYMOUS	0x20		/* don't use a file */
 #define MAP_GROWSDOWN	0x0100		/* stack-like segment */
 #define MAP_DENYWRITE	0x0800		/* ETXTBSY */

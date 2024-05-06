@@ -33,9 +33,12 @@ OBJS = $(COBJS) $(SOBJS)
 
 start.o: $(OUT)/start.o
 	cp $(OUT)/start.o .
+
 libc.a: $(OBJS)
 	#$(AR) rcs $@ $(OBJS)
 	$(AR) rcs $@ `lorder $(OBJS) | tsort -q`
+
+load: ../ldelf/load.o
 
 clean:
 	rm -f *.o *.a elks/*.o x86/*.o arm/*.o x64/*.o

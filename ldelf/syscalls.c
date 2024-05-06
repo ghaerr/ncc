@@ -183,7 +183,7 @@ static char *Utox(char p[19], unsigned long x) {
   return p;
 }
 
-__attribute__((__noreturn__)) static void Exit(long rc) {
+__attribute__((__noreturn__)) static void Exit(int rc) {
   int numba;
   if (IsLinux()) {
     if (IsAarch64()) {

@@ -1,18 +1,34 @@
 /* Inspired by @arget13/noexec.c and @jart/cosmopolitan/ape/loader.c */
 /* ELF loader */
+
 #include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <libgen.h>
-#include <signal.h>
-#include <termios.h>
 #include "../neatlibc/elf.h"
+
+#ifdef __neatcc__       /* for later use in C library as internal execve() loader */
+#include <stddef.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdarg.h>
+#define Strlen                  strlen
+#define StrCmp                  strcmp
+#define MemMove                 memmove
+#define Open                    open
+#define Close                   close
+#define Pread                   pread
+#define Mmap                    mmap
+#define Exit                    _exit
+#define __builtin_memcpy(d,s,n) memcpy(d,s,n)
+#define __builtin_va_list       va_list
+#define __builtin_va_start      va_start
+#define __builtin_va_arg        va_arg
+#define __builtin_va_end        va_end
+#define __builtin_unreachable()
+//#include "/Users/greg/net/ncc/ldelf/syscalls.c"
+#else
 #include "syscalls.c"
+#endif
 
 #define debug       1
 #define STACKADDR   ((void *)(0x080000000 - STACKLEN))  /* stack from 2G downwards */
@@ -25,7 +41,7 @@ static Elf64_Addr search_section(int fd, char* section);
 /* declaring this function static causes call ___bzero */
 Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 {
-    int fd;
+    int fd, i;
     Elf64_Phdr* phdr;
     uint16_t phnum;
     Elf64_Addr bss;
@@ -45,7 +61,7 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 	DEBUG1("phnum       ", phnum);
 	DEBUG1("bss section ", bss);
 
-    for(int i = 0; i < phnum; ++i)
+    for(i = 0; i < phnum; ++i)
     {
         if(phdr[i].p_type != PT_LOAD) continue;
 
@@ -73,7 +89,7 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
             void* extra = rebase + aligned + _filesz;
             rc = Mmap(extra, memsz - _filesz, prot, MAP_PRIVATE | MAP_FIXED | MAP_ANON, -1, 0);
 			DEBUG1("zero mmap   ", rc);
-			DEBUG1("     size   ", memsz - _filesz)
+			DEBUG1("     size   ", memsz - _filesz);
         }
 
         if(bss != 0 && (bss >= vaddr && bss < (vaddr + filesz)))
@@ -90,11 +106,12 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
 
 static Elf64_Addr search_section(int fd, char* section)
 {
-    Elf64_Ehdr ehdr;
-    Elf64_Shdr* shdr;
     uint16_t shnum;
     uint16_t shstrndx;
+    int i;
     char* shstrtab;
+    Elf64_Shdr* shdr;
+    Elf64_Ehdr ehdr;
 
     Pread(fd, &ehdr, sizeof(ehdr), 0);
 
@@ -106,7 +123,7 @@ static Elf64_Addr search_section(int fd, char* section)
     shstrtab = alloca(shdr[shstrndx].sh_size);
     Pread(fd, shstrtab, shdr[shstrndx].sh_size, shdr[shstrndx].sh_offset);
 
-    for(int i = 0; i < shnum; ++i)
+    for(i = 0; i < shnum; ++i)
         if(!StrCmp(&shstrtab[shdr[i].sh_name], section))
         {
             return shdr[i].sh_addr;
