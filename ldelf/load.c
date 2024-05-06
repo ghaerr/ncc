@@ -173,6 +173,8 @@ static void run(int argc, char** argv, int readfd, int writefd)
     uint64_t entry, phnum, phentsize, phaddr;
     uint64_t auxv[8 * 2];
     char* stack;
+    char** envp;
+    int envc;
     void** sp;
 
     (void)readfd;
@@ -203,7 +205,15 @@ static void run(int argc, char** argv, int readfd, int writefd)
     auxv[12] = 0x03; auxv[13] = phaddr;    // AT_PHDR
     auxv[14] =    0; auxv[15] = 0;         // End of auxv
     sp -= sizeof(auxv) / sizeof(*auxv); MemMove(sp, auxv, sizeof(auxv));
+
     *--sp = NULL; // End of envp
+    envp = (char **)(argv + argc + 1);
+    for (envc = 0; *envp++; envc++);
+    if (envc) {
+        envp = (char **)(argv + argc + 1);
+        sp -= envc; MemMove(sp, envp, envc * 8);
+    }
+
     *--sp = NULL; // End of argv
     sp -= argc; MemMove(sp, argv, argc * 8);
     *(size_t*) --sp = argc;

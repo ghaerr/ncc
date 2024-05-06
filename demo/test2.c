@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -46,7 +47,7 @@ void foo(char *a, char *b, char *c, char *d, char *e)
 
 int main(int argc, char **argv, char **envp)
 {
-#if 0
+#if 1
     int i;
     i = open("sdf", 0);
     printf("open %d errno %d\n", i, errno);
@@ -58,7 +59,11 @@ int main(int argc, char **argv, char **envp)
         //printf("'%lx' ", argv + i);
     printf("\n");
     for (i=0; i<32; i++) printf("malloc %lx\n", malloc(i & 1? 2048: 8192));
-    //while (*envp) printf("'%s'\n", *envp++);
+    printf("env: ");
+    while (*envp) {
+        printf("'%s' (=%lx)\n", *envp, *envp);
+        envp++;
+    }
     printf("%lx\n", 0xFFFF88881234abcd);
     long x = 0xFFFF88881234abcd;
     char buf[21];
