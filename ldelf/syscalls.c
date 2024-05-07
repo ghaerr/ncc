@@ -64,8 +64,8 @@
 static int os;
 static int pagesz;
 
-/*              rdi,  rsi,  rdx,  rcx/r10,r8,   r9,   8(rsp), 16(rsp)/eax */
-extern long SystemCall(long, long, long, long,   long, long, long,   int);
+extern long SystemCall(long rdi, long rsi, long rdx, long rcx_r10, long r8, long r9,
+                       long arg7_8rsp, int ax_16rsp);
 
 static long *InitAPE(long di, long *sp, char dl) {
   int argc;

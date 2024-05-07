@@ -19,6 +19,9 @@
 
 //	Invokes system call.
 //
+//	long SystemCall(long rdi, long rsi, long rdx, long rcx_r10, long r8, long r9,
+//			long arg7_8rsp, int ax_16rsp);
+//
 //	This function has eight parameters. The first seven are for
 //	arguments passed along to the system call. The eight is for
 //	the magic number that indicates which system call is called
@@ -37,3 +40,16 @@ _SystemCall:
 	jnc	1f
 	neg	%rax
 1:	ret
+
+	.globl _SystemCallFork
+_SystemCallFork:
+	mov	%rdi,%rax
+	clc
+	syscall
+	jnc	1f
+	mov     $-1,%rax
+	ret
+1:	or	%edx,%edx	// EDX zero in parent
+	jz	9f
+	xor	%rax,%rax
+9:	ret

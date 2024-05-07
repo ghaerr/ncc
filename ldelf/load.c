@@ -212,7 +212,7 @@ static void run(int argc, char** argv, int readfd, int writefd)
     *sp2++ = 0;                   /* envp null */
     *sp2++ = 0;                   /* null aux */
     sp = (void *)(stack + STACKLEN - bytes);
-    DEBUG1("ARGS  ", bytes);
+    DEBUG1("args size   ", bytes);
 #endif
 
 #if 0
@@ -233,6 +233,38 @@ static void run(int argc, char** argv, int readfd, int writefd)
     __builtin_unreachable();
 }
 
+static long Read(int fd, void *data, unsigned long size) {
+  long numba;
+  if (IsLinux()) {
+      numba = 0x00;
+  } else if (IsXnu()) {
+    numba = 0x2000003;
+  } else return -1;
+  return SystemCall(fd, (long)data, size, 0, 0, 0, 0, numba);
+}
+
+extern long SystemCallFork(int numba);
+
+static long Fork(void) {
+  long numba;
+  if (IsLinux()) {
+      numba = 57;
+  } else if (IsXnu()) {
+    numba = 0x2000002;
+  } else return -1;
+  return SystemCallFork(numba);
+}
+
+static long WaitPid(int pid, int *status, int options) {
+  long numba;
+  if (IsLinux()) {
+      numba = 61;
+  } else if (IsXnu()) {
+    numba = 0x2000007;  /* wait4 */
+  } else return -1;
+  return SystemCall(pid, (long)status, options, 0, 0, 0, 0, numba);
+}
+
 __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
 {
     int argc;
@@ -242,8 +274,28 @@ __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
     argc = *sp;
     argv = (char **)(sp + 1);
 
-    if (argc > 1)
+    //Print(2, "Usage: load <program> [args...]\n", 0);
+    if (argc > 1) {
         run(argc-1, argv+1, 0, 1);
-    else Print(2, "Usage: load <program> [args...]\n", 0);
+    } else for (;;) {       /* interactive shell mode */
+        long rc;
+        char *av[2];
+        char buf[80];
+
+        Print(2, "$ ", 0);
+        rc = Read(0, buf, 80);
+        if (rc <= 0) Exit(2);
+        buf[rc - 1] = '\0';
+        if (!buf[0])
+            continue;
+        av[0] = buf;
+        av[1] = NULL;
+        if (Fork() == 0) {
+            run(1, av, 0, 1);
+            Print(2, "Failed\n", 0);
+            Exit(255);
+        }
+        WaitPid(-1, NULL, 0);
+    }
     Exit(1);
 }
