@@ -158,7 +158,7 @@ static void run(int argc, char** argv, int readfd, int writefd)
     if(argc & 1)
         *--sp = NULL; // Keep stack aligned
     auxv[ 0] = 0x06; auxv[ 1] = 0x1000;    // AT_PAGESZ
-    auxv[ 2] = 0x19; auxv[ 3] = 0;   	   // AT_RANDOM (whatever)
+    auxv[ 2] = 0x19; auxv[ 3] = 0;         // AT_RANDOM (whatever)
     auxv[ 4] = 0x09; auxv[ 5] = entry;     // AT_ENTRY
     auxv[ 6] = 0x07; auxv[ 7] = base;      // AT_BASE
     auxv[ 8] = 0x05; auxv[ 9] = phnum;     // AT_PHNUM
@@ -265,6 +265,42 @@ static long WaitPid(int pid, int *status, int options) {
   return SystemCall(pid, (long)status, options, 0, 0, 0, 0, numba);
 }
 
+static char *StrCpy(char *d, const char *s) {
+  char *dst = d;
+  while ((*d++ = *s++) != '\0')
+    ;
+  return dst;
+}
+
+#define MAXARGS     40
+#define CMDLEN      80
+#define isblank(c)	((c) == ' ' || (c) == '\t')
+
+static int makeargs(char *cmd, int *argcptr, char ***argvptr)
+{
+    char    *cp;
+    int     argc;
+    static char strings[CMDLEN+1];
+    static char *argtable[MAXARGS+1];
+
+    StrCpy(strings, cmd);
+    argc = 0;
+    cp = strings;
+    while (*cp) {
+        if (argc >= MAXARGS)
+            return 0;
+        argtable[argc++] = cp;
+        while (*cp && !isblank(*cp))
+            cp++;
+        while (isblank(*cp))
+            *cp++ = '\0';
+    }
+    argtable[argc] = NULL;
+    *argcptr = argc;
+    *argvptr = argtable;
+    return 1;
+}
+
 __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
 {
     int argc;
@@ -279,7 +315,8 @@ __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
         run(argc-1, argv+1, 0, 1);
     } else for (;;) {       /* interactive shell mode */
         long rc;
-        char *av[2];
+        int ac;
+        char **av;
         char buf[80];
 
         Print(2, "$ ", 0);
@@ -288,10 +325,9 @@ __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
         buf[rc - 1] = '\0';
         if (!buf[0])
             continue;
-        av[0] = buf;
-        av[1] = NULL;
         if (Fork() == 0) {
-            run(1, av, 0, 1);
+            if (makeargs(buf, &ac, &av))
+                run(ac, av, 0, 1);
             Print(2, "Failed\n", 0);
             Exit(255);
         }
