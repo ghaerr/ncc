@@ -1,3 +1,30 @@
+/* getcwd.c */
+
+#ifdef __APPLE__
+#include <stddef.h>
+#include <fcntl.h>
+
+char *
+getcwd(char *buf, int size)
+{
+    int fd, n, ret;
+    char path[256];
+
+    if ((fd = open(".", O_RDONLY | O_DIRECTORY)) < 0)
+        return NULL;
+    ret = fcntl(fd, F_GETPATH, path);
+    close(fd);
+    if (ret != -1) {
+        n = strlen(path) + 1;
+        if (n <= size) {
+            memcpy(buf, path, n);
+            return buf;
+        }
+    }
+    return NULL;
+}
+#else
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -129,3 +156,4 @@ getcwd(char *buf, int size)
 
    return recurser();
 }
+#endif

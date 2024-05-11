@@ -28,6 +28,7 @@
 #define F_GETLK         7               /* get record locking information */
 #define F_SETLK         8               /* set record locking information */
 #define F_SETLKW        9               /* F_SETLK; wait if blocked */
+#define F_GETPATH       50              /* get full path of file descriptor */
 
 #define FD_CLOEXEC      1               /* close-on-exec flag */
 
