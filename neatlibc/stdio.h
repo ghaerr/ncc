@@ -1,19 +1,19 @@
 #include <stdarg.h>
 
-#define EOF		(-1)
-#define putc(c, fp)	(fputc(c, fp))
-#define getc(fp)	(fgetc(fp))
-#define BUFSIZ		(1024)
+#define EOF             (-1)
+#define putc(c, fp)     (fputc(c, fp))
+#define getc(fp)        (fgetc(fp))
+#define BUFSIZ          (1024)
 
 typedef struct {
-	int fd;
-	int back;		/* pushback buffer */
-	char *ibuf, *obuf;	/* input/output buffer */
-	int isize, osize;	/* ibuf size */
-	int ilen, olen;		/* length of data in buf */
-	int iown, oown;		/* free the buffer when finished */
-	int icur;		/* current position in ibuf */
-	int ostat;
+        int fd;
+        int back;               /* pushback buffer */
+        char *ibuf, *obuf;      /* input/output buffer */
+        int isize, osize;       /* ibuf size */
+        int ilen, olen;         /* length of data in buf */
+        int iown, oown;         /* free the buffer when finished */
+        int icur;               /* current position in ibuf */
+        int ostat;
 } FILE;
 
 extern FILE *stdin;
