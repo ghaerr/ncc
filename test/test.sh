@@ -1,5 +1,6 @@
 #!/bin/sh
-LOADER=../ldelf/ldelf
+#LOADER=../ldelf/ldelf
+LOADER=../ldelf/load
 for i in `seq -w 0 30`
 do
 	f="b$i.x"

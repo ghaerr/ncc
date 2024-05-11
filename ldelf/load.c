@@ -30,7 +30,7 @@
 #include "syscalls.c"
 #endif
 
-#define debug       1
+#define debug       0
 #define STACKADDR   ((void *)(0x080000000 - STACKLEN))  /* stack from 2G downwards */
 #define STACKLEN    (2048 * 4096)                       /* 8MB stack */
 
