@@ -46,11 +46,13 @@ search_dir(dev_t this_dev, u_ino_t this_ino)
    }
    slen++;
 
+   printf("opendir %s\n", path_buf);
    dp = opendir(path_buf);
    if( dp == NULL ) return NULL;
 
    while( (d=readdir(dp)) != NULL )
    {
+      printf("search %-16s %16lx %16lx\n", d->d_name, this_ino, d->d_ino);
       if( slow_search || this_ino == d->d_ino )
       {
          if( slen + strlen(d->d_name) > path_size )
@@ -69,6 +71,7 @@ search_dir(dev_t this_dev, u_ino_t this_ino)
       }
    }
 
+   printf("Not found\n");
    closedir(dp);
    errno = ENOENT;
    return NULL;
@@ -84,8 +87,10 @@ recurser(void)
    if( stat(path_buf, &st) < 0 ) return NULL;
    this_dev = st.st_dev;
    this_ino = st.st_ino;
+printf("%-16s this_ino %lx\n", path_buf, this_ino);
    if( this_dev == root_dev && this_ino == root_ino )
    {
+      printf("root_dev %lx root_ino %lx\n", root_dev, root_ino);
       strcpy(path_buf, "/");
       return path_buf;
    }
@@ -113,10 +118,14 @@ getcwd(char *buf, int size)
    }
    strcpy(path_buf, ".");
 
-   if( stat("/", &st) < 0 ) return NULL;
+   if( stat("/", &st) < 0 ) {
+      printf("stat fail: %d\n", errno);
+      return NULL;
+   }
 
    root_dev = st.st_dev;
    root_ino = st.st_ino;
+   printf("root_dev %lx root_ino %lx\n", root_dev, root_ino);
 
    return recurser();
 }

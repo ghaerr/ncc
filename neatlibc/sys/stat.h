@@ -41,13 +41,39 @@
 #ifdef __x86_64__
 
 #ifdef __APPLE__
-struct stat {
+#if 1
+struct stat {           /* stat64 */
 	uint32_t	st_dev;
-	unsigned int	st_ino;
 	uint16_t	st_mode;
 	uint16_t	st_nlink;
-	uint16_t	st_uid;
-	uint16_t	st_gid;
+	uint64_t	st_ino;
+	uint32_t	st_uid;
+	uint32_t	st_gid;
+	uint32_t	st_rdev;        /* device type */
+	long		st_atime;
+	unsigned long	st_atime_nsec;
+	long		st_mtime;
+	unsigned long	st_mtime_nsec;
+	long		st_ctime;
+	unsigned long	st_ctime_nsec;
+	long		st_btime;
+	unsigned long	st_btime_nsec;
+	uint64_t        st_size;
+	int64_t       	st_blocks;      /* blocks allocated for file */
+	int32_t	        st_blksize;     /* optimal blocksize for I/O */
+	unsigned int	st_flags;       /* user flags */
+	unsigned int	st_gen;         /* file generation number */
+	unsigned int    st_lspare;
+	unsigned long   st_qspare[2];
+};
+#else
+struct stat {           /* stat (32-bit inode) */
+	uint32_t	st_dev;
+	uint32_t	st_ino;
+	uint16_t	st_mode;
+	uint16_t	st_nlink;
+	uint32_t	st_uid;
+	uint32_t	st_gid;
 	uint32_t	st_rdev;        /* device type */
 	long		st_atime;
 	unsigned long	st_atime_nsec;
@@ -56,13 +82,14 @@ struct stat {
 	long		st_ctime;
 	unsigned long	st_ctime_nsec;
 	unsigned long	st_size;
-        unsigned int	st_blocks;      /* blocks allocated for file */
-	unsigned long	st_blksize;     /* optimal blocksize for I/O */
+	int64_t 	st_blocks;      /* blocks allocated for file */
+	int32_t       	st_blksize;     /* optimal blocksize for I/O */
 	unsigned int	st_flags;       /* user flags */
 	unsigned int	st_gen;         /* file generation number */
-	unsigned int    st_spare;
+	unsigned int    st_lspare;
 	unsigned long   st_qspare[2];
 };
+#endif
 #else
 struct stat {
 	unsigned long	st_dev;

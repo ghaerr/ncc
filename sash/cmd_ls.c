@@ -215,7 +215,11 @@ lsfile(name, statbuf, flags)
 	*cp = '\0';
 
 	if (flags & LSF_INODE) {
-		sprintf(cp, "%5lu ", (unsigned long)statbuf->st_ino);
+#ifdef __APPLE__
+		sprintf(cp, "%16lx ", (unsigned long)statbuf->st_ino);
+#else
+		sprintf(cp, "%16lu ", (unsigned long)statbuf->st_ino);
+#endif
 		cp += strlen(cp);
 	}
 
@@ -255,10 +259,10 @@ lsfile(name, statbuf, flags)
 #endif
 
 		if (S_ISBLK(statbuf->st_mode) || S_ISCHR(statbuf->st_mode))
-			sprintf(cp, "%3d, %3d ", statbuf->st_rdev >> 8,
+			sprintf(cp, "%7d, %3d ", statbuf->st_rdev >> 8,
 				statbuf->st_rdev & 0xff);
 		else
-			sprintf(cp, "%8lld ", statbuf->st_size);
+			sprintf(cp, "%8ld ", statbuf->st_size);
 		cp += strlen(cp);
 
 		sprintf(cp, " %-12s ", timestring(statbuf->st_mtime));

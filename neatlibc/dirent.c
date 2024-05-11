@@ -23,7 +23,7 @@
 #define DTF_REWIND      0x0004	/* rewind after reading union stack */
 #define __DTF_READALL   0x0008	/* everything has been read */
 
-struct __dirent_dir {
+struct __dirent_dir {       /* Darwin */
     int fd;                 /* file descriptor associated with directory */
     int dd_loc;             /* offset in current buffer */
     int dd_size;            /* amount of data returned by getdirentries */
@@ -32,7 +32,7 @@ struct __dirent_dir {
     char dd_buf[2048];
 };
 #else
-struct __dirent_dir {
+struct __dirent_dir {       /* Linux */
 	int fd;
 	int buf_pos;
 	int buf_end;
@@ -84,6 +84,8 @@ struct dirent * readdir(DIR *dirp)
                 return NULL;
         }
         dp = (struct dirent *)(dirp->dd_buf + dirp->dd_loc);
+        /*printf("ino %lx reclen %d type %d namlen %d name %s\n",
+            (long)dp->d_ino, dp->d_reclen, dp->d_type, dp->d_namlen, dp->d_name);*/
         if ((int)dp & 03)       /* bogus pointer check */
             return (NULL);
         if (dp->d_reclen <= 0 || dp->d_reclen > sizeof(dirp->dd_buf) + 1 - dirp->dd_loc)

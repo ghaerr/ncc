@@ -7,6 +7,7 @@
 #define PGMASK		(PGSIZE - 1)
 #define MSETMAX		4096
 #define MSETLEN		(1 << 15)
+#define MIN(a, b)	((a) < (b) ? (a) : (b))
 
 /* placed at the beginning of regions for small allocations */
 struct mset {
@@ -52,6 +53,8 @@ static int mk_pool(void)
 void *malloc(long n)
 {
 	void *m;
+	if (!n)
+		return NULL;
 	if (n >= MSETMAX) {
 #ifdef __APPLE__
 		m = mmap(heaptop, n + PGSIZE, PROT_READ | PROT_WRITE,
@@ -82,6 +85,13 @@ void *malloc(long n)
 	return m + sizeof(struct mhdr);
 }
 
+static long msize(void *v)
+{
+	if ((unsigned long) v & PGMASK)
+		return ((struct mhdr *) (v - sizeof(struct mhdr)))->size;
+	return *(long *) (v - PGSIZE);
+}
+
 void free(void *v)
 {
 	if (!v)
@@ -105,18 +115,13 @@ void *calloc(long n, long sz)
 	return r;
 }
 
-static long msize(void *v)
-{
-	if ((unsigned long) v & PGMASK)
-		return ((struct mhdr *) (v - sizeof(*v)))->size;
-	return *(long *) (v - PGSIZE);
-}
-
 void *realloc(void *v, long sz)
 {
 	void *r = malloc(sz);
+	long osz = msize(v);
+	/*printf("REALLOC %lx size %ld to %lx size %ld\n", v, osz, r, sz);*/
 	if (r && v) {
-		memcpy(r, v, msize(v));
+		memcpy(r, v, MIN(osz, sz));
 		free(v);
 	}
 	return r;

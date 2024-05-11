@@ -247,17 +247,26 @@ munmap:
 
 global stat:function
 stat:
-	mov	eax, 188
+	;mov	eax, 188	; stat
+	mov	eax, 338	; stat64
 	jmp	__syscall
 
 global lstat:function
 lstat:
-	mov	eax, 190
+	;mov	eax, 190	; lstat
+	mov	eax, 340	; lstat64
 	jmp	__syscall
 
 global fstat:function
 fstat:
-	mov	eax, 189
+	;mov	eax, 189	; fstat
+	mov	eax, 339        ; fstat64
+	jmp	__syscall
+
+global getdirentries:function
+getdirentries:
+	;mov	eax, 196	; getdirentries
+	mov	eax, 344	; getdirentries64
 	jmp	__syscall
 
 ;global clone:function
@@ -273,11 +282,6 @@ fstat:
 global fchdir:function
 fchdir:
 	mov	eax, 13
-	jmp	__syscall
-
-global getdirentries:function
-getdirentries:
-	mov	eax, 196
 	jmp	__syscall
 
 ;global nanosleep:function
