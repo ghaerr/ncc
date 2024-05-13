@@ -19,6 +19,8 @@
 
 /* system call and utility routines for portable static binaries */
 
+#include "../neatlibc/syscalls.h"
+
 #define LINUX   1
 #define XNU     8
 #define OPENBSD 16
@@ -48,26 +50,20 @@
 #define AT_PAGESZ          6
 #define AT_EXECFN_NETBSD   2014
 
-
-#define DEBUG(STR)                  \
-  if (debug) {                      \
-    Print(2, STR, 0l);              \
-  }
-
-#define DEBUG1(STR,VAR)             \
-  if (debug) {                      \
-    char ibuf[32];                  \
-    Utox(ibuf, VAR);                \
-    Print(2, STR, ibuf, "\n", 0l);  \
-  }
-
 static int os;
 static int pagesz;
 
 extern long SystemCall(long rdi, long rsi, long rdx, long rcx_r10, long r8, long r9,
                        long arg7_8rsp, int ax_16rsp);
 
-static long *InitAPE(long di, long *sp, char dl) {
+__attribute__((__noinline__))
+static long CallSystem(long arg1, long arg2, long arg3, long arg4, long arg5,
+                       long arg6, long arg7, int numba) {
+  if (IsXnu()) numba |= 0x2000000;
+  return SystemCall(arg1, arg2, arg3, arg4, arg5, arg6, arg7, numba);
+}
+
+long *InitAPE(long di, long *sp, char dl) {
   int argc;
   long *auxv, *ap;;
   char **argv, **envp;
@@ -123,14 +119,7 @@ static long *InitAPE(long di, long *sp, char dl) {
   return sp;
 }
 
-__attribute__((__noinline__))
-static long CallSystem(long arg1, long arg2, long arg3, long arg4, long arg5,
-                       long arg6, long arg7, int numba) {
-  if (IsXnu()) numba |= 0x2000000;
-  return SystemCall(arg1, arg2, arg3, arg4, arg5, arg6, arg7, numba);
-}
-
-static long Write(int fd, const void *data, unsigned long size) {
+long Write(int fd, const void *data, unsigned long size) {
   int numba;
   if (IsLinux()) {
     if (IsAarch64()) {
@@ -144,46 +133,7 @@ static long Write(int fd, const void *data, unsigned long size) {
   return CallSystem(fd, (long)data, size, 0, 0, 0, 0, numba);
 }
 
-static long Print(int fd, const char *s, ...) {
-  int c;
-  unsigned n;
-  char b[512];
-  __builtin_va_list va;
-  __builtin_va_start(va, s);
-  for (n = 0; s; s = __builtin_va_arg(va, const char *)) {
-    while ((c = *s++)) {
-      if (n < sizeof(b)) {
-        b[n++] = c;
-      }
-    }
-  }
-  __builtin_va_end(va);
-  return Write(fd, b, n);
-}
-
-static char *Utox(char p[19], unsigned long x) {
-  int i;
-  if (x) {
-#if 0   /* hex formatting */
-    *p++ = '0';
-    *p++ = 'x';
-    i = (__builtin_clzl(x) ^ (sizeof(long) * 8 - 1)) + 1;
-    i = (i + 3) & -4;
-#else
-    i = 64;
-#endif
-    do {
-      if (i == 32) *p++ = '_';
-      *p++ = "0123456789abcdef"[(x >> (i -= 4)) & 15];
-    } while (i);
-  } else {
-    *p++ = '0';
-  }
-  *p = 0;
-  return p;
-}
-
-__attribute__((__noreturn__)) static void Exit(int rc) {
+__attribute__((__noreturn__)) void Exit(int rc) {
   int numba;
   if (IsLinux()) {
     if (IsAarch64()) {
@@ -198,19 +148,26 @@ __attribute__((__noreturn__)) static void Exit(int rc) {
   __builtin_unreachable();
 }
 
-static unsigned long StrLen(const char *s) {
-  unsigned long n = 0;
+long StrLen(const char *s) {
+  long n = 0;
   while (*s++) ++n;
   return n;
 }
 
-static int StrCmp(const char *l, const char *r) {
+char *StrCpy(char *d, const char *s) {
+  char *dst = d;
+  while ((*d++ = *s++) != '\0')
+    ;
+  return dst;
+}
+
+int StrCmp(const char *l, const char *r) {
   unsigned long i = 0;
   while (l[i] == r[i] && r[i]) ++i;
   return (l[i] & 255) - (r[i] & 255);
 }
 
-static void Bzero(void *a, unsigned long n) {
+void Bzero(void *a, unsigned long n) {
   long z;
   volatile char *p;
   char *e;
@@ -226,7 +183,7 @@ static void Bzero(void *a, unsigned long n) {
   }
 }
 
-static void *MemMove(void *a, const void *b, unsigned long n) {
+void *MemMove(void *a, const void *b, unsigned long n) {
   long w;
   char *d;
   const char *s;
@@ -256,7 +213,7 @@ static void *MemMove(void *a, const void *b, unsigned long n) {
   return d;
 }
 
-static long Pread(int fd, void *data, unsigned long size, long off) {
+long Pread(int fd, void *data, unsigned long size, long off) {
   long numba;
   if (IsLinux()) {
     if (IsAarch64()) {
@@ -278,7 +235,7 @@ static long Pread(int fd, void *data, unsigned long size, long off) {
   return SystemCall(fd, (long)data, size, off, off, 0, 0, numba);
 }
 
-static int Open(const char *path, int flags, int mode) {
+int Open(const char *path, int flags, int mode) {
   if (IsLinux() && IsAarch64()) {
     return SystemCall(-100, (long)path, flags, mode, 0, 0, 0, 56);
   } else {
@@ -286,7 +243,7 @@ static int Open(const char *path, int flags, int mode) {
   }
 }
 
-static int Close(int fd) {
+int Close(int fd) {
   int numba;
   if (IsLinux()) {
     if (IsAarch64()) {
@@ -300,7 +257,7 @@ static int Close(int fd) {
   return CallSystem(fd, 0, 0, 0, 0, 0, 0, numba);
 }
 
-static long Mmap(void *addr, unsigned long size, int prot, int flags, int fd, long off) {
+long Mmap(void *addr, unsigned long size, int prot, int flags, int fd, long off) {
   long numba;
   if (IsLinux()) {
     if (IsAarch64()) {
@@ -320,4 +277,36 @@ static long Mmap(void *addr, unsigned long size, int prot, int flags, int fd, lo
     __builtin_unreachable();
   }
   return SystemCall((long)addr, size, prot, flags, fd, off, off, numba);
+}
+
+long Read(int fd, void *data, unsigned long size) {
+  long numba;
+  if (IsLinux()) {
+      numba = 0x00;
+  } else if (IsXnu()) {
+    numba = 0x2000003;
+  } else return -1;
+  return SystemCall(fd, (long)data, size, 0, 0, 0, 0, numba);
+}
+
+extern long SystemCallFork(int numba);
+
+long Fork(void) {
+  long numba;
+  if (IsLinux()) {
+      numba = 57;
+  } else if (IsXnu()) {
+    numba = 0x2000002;
+  } else return -1;
+  return SystemCallFork(numba);
+}
+
+long WaitPid(int pid, int *status, int options) {
+  long numba;
+  if (IsLinux()) {
+      numba = 61;
+  } else if (IsXnu()) {
+    numba = 0x2000007;  /* wait4 */
+  } else return -1;
+  return SystemCall(pid, (long)status, options, 0, 0, 0, 0, numba);
 }

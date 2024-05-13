@@ -19,7 +19,7 @@ LDFLAGS += -e xnustart
 endif
 
 LDELF = ldelf.o systemcall.o launch.o start.o
-LOAD = load.o systemcall.o launch.o start.o
+LOAD = load.o syscalls.o systemcall.o launch.o start.o
 
 all: ldelf load
 

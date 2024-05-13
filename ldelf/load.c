@@ -1,40 +1,81 @@
-/* Inspired by @arget13/noexec.c and @jart/cosmopolitan/ape/loader.c */
-/* ELF loader */
+/*
+ * ELF loader compilable by ncc, gcc and clang for macOS and Linux.
+ *
+ * This loader is compiled and used by the host OS to initially load
+ * NCC ELF binaries, as well as compiled by NCC and used within NCC
+ * binaries as an exec function.
+ *
+ * Inspired by @arget13/noexec.c and @jart/cosmopolitan/ape/loader.c
+ *
+ * May 2024 Greg Haerr
+ */
 
+#include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include "../neatlibc/elf.h"
-
-#ifdef __neatcc__       /* for later use in C library as internal execve() loader */
-#include <stddef.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdarg.h>
-#define Strlen                  strlen
-#define StrCmp                  strcmp
-#define MemMove                 memmove
-#define Open                    open
-#define Close                   close
-#define Pread                   pread
-#define Mmap                    mmap
-#define Exit                    _exit
-#define __builtin_memcpy(d,s,n) memcpy(d,s,n)
-#define __builtin_va_list       va_list
-#define __builtin_va_start      va_start
-#define __builtin_va_arg        va_arg
-#define __builtin_va_end        va_end
-#define __builtin_unreachable()
-//#include "/Users/greg/net/ncc/ldelf/syscalls.c"
-#else
-#include "syscalls.c"
-#endif
+#include "../neatlibc/syscalls.h"
 
 #define debug       1
-#define STACKTOP    0x080000000         /* stack from 2G downwards */
-#define STACKLEN    0x00800000          /* 8MB stack */
 
-extern void Launch(void *rdi, long entry, void *sp, int rcx) __attribute__((__noreturn__));
+#ifdef __neatcc__       /* for use in C library as internal execve() loader */
+#include <assert.h>
+/* ncc requires both sides of token paste to have no space and be macro parms! */
+#define alloc(p,n,sz)           char p##n [65536]; p = (void *)p##n
+#define STACKTOP    0x70000000          /* stack from 2G-256M downwards */
+#define STACKLEN    0x00800000          /* 8MB stack */
+#define BASEADDR    0x00400000          /* lowest loadable program segment */
+#else
+#define STACKTOP    0x80000000          /* stack from 2G downwards */
+#define STACKLEN    0x00800000          /* 8MB stack */
+#define alloc(p,n,sz)           p = alloca(sz)
+#define unassert(expr)
+#endif
+
+#define DEBUG(STR)                              \
+  if (debug) {                                  \
+    Print(2, STR, 0);                           \
+  }
+
+#define DEBUG1(STR,VAR)                         \
+  if (debug) {                                  \
+    char ibuf[32];                              \
+    Print(2, STR, HexStr(ibuf, VAR), "\n", 0);  \
+  }
+
+static char *HexStr(char *buf, unsigned long x) {
+  char *p = buf;
+  int i = 64;
+  if (x) {
+    do {
+      if (i == 32) *p++ = '_';
+      *p++ = "0123456789abcdef"[(x >> (i -= 4)) & 15];
+    } while (i);
+  } else {
+    *p++ = '0';
+  }
+  *p = 0;
+  return buf;
+}
+
+static long Print(int fd, const char *s, ...) {
+  int c;
+  unsigned n;
+  char b[512];
+  __builtin_va_list va;
+  __builtin_va_start(va, s);
+  for (n = 0; s; s = __builtin_va_arg(va, const char *)) {
+    while ((c = *s++)) {
+      if (n < sizeof(b)) {
+        b[n++] = c;
+      }
+    }
+  }
+  __builtin_va_end(va);
+  return Write(fd, b, n);
+}
 
 static Elf64_Addr search_section(int fd, char* section)
 {
@@ -48,11 +89,11 @@ static Elf64_Addr search_section(int fd, char* section)
     Pread(fd, &ehdr, sizeof(ehdr), 0);
 
     shnum = ehdr.e_shnum;
-    shdr = alloca(sizeof(*shdr) * shnum);
+    alloc(shdr, 1, sizeof(*shdr) * shnum);
     Pread(fd, shdr, sizeof(*shdr) * shnum, ehdr.e_shoff);
 
     shstrndx = ehdr.e_shstrndx;
-    shstrtab = alloca(shdr[shstrndx].sh_size);
+    alloc(shstrtab, 2, shdr[shstrndx].sh_size);
     Pread(fd, shstrtab, shdr[shstrndx].sh_size, shdr[shstrndx].sh_offset);
 
     for(i = 0; i < shnum; ++i)
@@ -65,7 +106,7 @@ static Elf64_Addr search_section(int fd, char* section)
 }
 
 /* declaring this function static causes call ___bzero */
-Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
+Elf64_Ehdr *Load(char* path, Elf64_Addr rebase)
 {
     int fd, i;
     Elf64_Phdr* phdr;
@@ -80,8 +121,14 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
         Exit(0);
     }
     Pread(fd, &ehdr, sizeof(ehdr), 0);
+    if (ehdr.e_ident[0] != 0x7f && ehdr.e_ident[1] != 'E') {
+        Print(2, path, ": not ELF\n", 0);
+        Close(fd);
+        return 0;
+    }
+
     phnum = ehdr.e_phnum;
-    phdr = alloca(sizeof(*phdr) * phnum);
+    alloc(phdr, 1, sizeof(*phdr) * phnum);
     Pread(fd, phdr, sizeof(*phdr) * phnum, ehdr.e_phoff);
     bss = search_section(fd, ".bss");
     DEBUG1("phnum       ", phnum);
@@ -97,6 +144,14 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
         size_t     filesz  = phdr[i].p_filesz;
         size_t     memsz   = phdr[i].p_memsz;
         char *     aligned = (char *) (vaddr & (~0xfff));
+
+#ifdef __neatcc__
+        if (aligned < BASEADDR) {
+            Print("Bad load address: ", aligned, "\n", 0);
+            Close(fd);
+            return 0;
+        }
+#endif
 
         uint32_t prot = ((flags & PF_R) ? PROT_READ  : 0) |
                         ((flags & PF_W) ? PROT_WRITE : 0) |
@@ -130,15 +185,18 @@ Elf64_Ehdr *load(char* path, Elf64_Addr rebase)
     return &ehdr;
 }
 
-__attribute__((noreturn))
 static void run(int argc, char** argv, int readfd, int writefd)
 {
+    Elf64_Ehdr *ehdr;
     (void)readfd;
     (void)writefd;
 
-    Elf64_Ehdr *ehdr = load(argv[0], 0);
+    if (!(ehdr = Load(argv[0], 0)))
+        return;
     char *stack = (char *)Mmap((void *)(STACKTOP - STACKLEN), STACKLEN,
         PROT_READ | PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    unassert(stack == (void *)(STACKTOP - STACKLEN));
+
     void **sp = (void**) &stack[STACKLEN];
     uint64_t entry = ehdr->e_entry;
     DEBUG1("entry       ", entry);
@@ -233,45 +291,6 @@ static void run(int argc, char** argv, int readfd, int writefd)
     __builtin_unreachable();
 }
 
-static long Read(int fd, void *data, unsigned long size) {
-  long numba;
-  if (IsLinux()) {
-      numba = 0x00;
-  } else if (IsXnu()) {
-    numba = 0x2000003;
-  } else return -1;
-  return SystemCall(fd, (long)data, size, 0, 0, 0, 0, numba);
-}
-
-extern long SystemCallFork(int numba);
-
-static long Fork(void) {
-  long numba;
-  if (IsLinux()) {
-      numba = 57;
-  } else if (IsXnu()) {
-    numba = 0x2000002;
-  } else return -1;
-  return SystemCallFork(numba);
-}
-
-static long WaitPid(int pid, int *status, int options) {
-  long numba;
-  if (IsLinux()) {
-      numba = 61;
-  } else if (IsXnu()) {
-    numba = 0x2000007;  /* wait4 */
-  } else return -1;
-  return SystemCall(pid, (long)status, options, 0, 0, 0, 0, numba);
-}
-
-static char *StrCpy(char *d, const char *s) {
-  char *dst = d;
-  while ((*d++ = *s++) != '\0')
-    ;
-  return dst;
-}
-
 #define MAXARGS     40
 #define CMDLEN      80
 #define isblank(c)	((c) == ' ' || (c) == '\t')
@@ -301,16 +320,14 @@ static int makeargs(char *cmd, int *argcptr, char ***argvptr)
     return 1;
 }
 
-__attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
-{
-    int argc;
-    char **argv;
-
+#ifdef __neatcc__
+int main(int argc, char **argv) {
+#else
+__attribute__((__noreturn__)) void Main(long di, long *sp, char dl) {
     sp = InitAPE(di, sp, dl);
-    argc = *sp;
-    argv = (char **)(sp + 1);
-
-    //Print(2, "Usage: load <program> [args...]\n", 0);
+    int argc = *sp;
+    char **argv = (char **)(sp + 1);
+#endif
     if (argc > 1) {
         run(argc-1, argv+1, 0, 1);
     } else for (;;) {       /* interactive shell mode */
@@ -319,19 +336,21 @@ __attribute__((__noreturn__)) void Main(long di, long *sp, char dl)
         char **av;
         char buf[80];
 
-        Print(2, "$ ", 0);
+        Print(2, "% ", 0);
         rc = Read(0, buf, 80);
-        if (rc <= 0) Exit(2);
+        if (rc <= 0) Exit(0);
         buf[rc - 1] = '\0';
         if (!buf[0])
             continue;
         if (Fork() == 0) {
             if (makeargs(buf, &ac, &av))
                 run(ac, av, 0, 1);
-            Print(2, "Failed\n", 0);
+            Print(2, "Load failed: ", av[0], "\n", 0);
             Exit(255);
         }
-        WaitPid(-1, NULL, 0);
+        int status;
+        WaitPid(-1, &status, 0);
+        DEBUG1("exit status ", WEXITSTATUS(status));
     }
     Exit(1);
 }
