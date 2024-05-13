@@ -16,6 +16,7 @@ int isatty(int fd);
 int close(int fd);
 long write(int fd, void *buf, long n);
 long read(int fd, void *buf, long n);
+long pread(int fd, void *buf, long n, long offset);
 
 /* lseek() whence */
 #define SEEK_SET	0

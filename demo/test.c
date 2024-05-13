@@ -1,8 +1,12 @@
-//#include <stdio.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 
-int main(void)
+int main(int ac, char **av)
 {
-	//printf("NEATCC DEMO!\n");
-	write(1, "NEATCC DEMO!\n", 13);
-	return 0;
+    write(1, "NEATCC DEMO!\n", 13);
+    while (ac-- > 0)
+        printf("%s ", *av++);
+    printf("\n");
+    return 0;
 }

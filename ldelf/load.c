@@ -30,9 +30,9 @@
 #include "syscalls.c"
 #endif
 
-#define debug       0
-#define STACKADDR   ((void *)(0x080000000 - STACKLEN))  /* stack from 2G downwards */
-#define STACKLEN    (2048 * 4096)                       /* 8MB stack */
+#define debug       1
+#define STACKTOP    0x080000000         /* stack from 2G downwards */
+#define STACKLEN    0x00800000          /* 8MB stack */
 
 extern void Launch(void *rdi, long entry, void *sp, int rcx) __attribute__((__noreturn__));
 
@@ -137,8 +137,8 @@ static void run(int argc, char** argv, int readfd, int writefd)
     (void)writefd;
 
     Elf64_Ehdr *ehdr = load(argv[0], 0);
-    char *stack = (char *)Mmap(STACKADDR, STACKLEN, PROT_READ | PROT_WRITE,
-                 MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    char *stack = (char *)Mmap((void *)(STACKTOP - STACKLEN), STACKLEN,
+        PROT_READ | PROT_WRITE, MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     void **sp = (void**) &stack[STACKLEN];
     uint64_t entry = ehdr->e_entry;
     DEBUG1("entry       ", entry);

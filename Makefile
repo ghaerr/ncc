@@ -67,13 +67,17 @@ boot:
 	@cd neatdbg && $(MAKE) CC="$(BOOTLDR) ../neatrun/neatcc" OUT=$(OUT) clean all
 	@echo DONE
 
-.PHONY: sash test libc
+.PHONY: sash test libc demo
 sash:
 	@cd sash && $(MAKE)
 	$(LOADER) sash/sash
 
 libc:
 	@cd neatlibc && $(MAKE)
+
+demo:
+	@cd demo && $(MAKE)
+	$(LOADER) demo/test
 
 test:
 	@cd test && $(MAKE)

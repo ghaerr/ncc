@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <errno.h>
 
 #ifndef __APPLE__
 int sleep(int n)
@@ -107,6 +108,21 @@ int wait(int *status)
 	return waitpid(-1, status, 0);
 }
 
+long pread(int fd, void *buf, long n, long offset)
+{
+    long ret, old;
+    int e;
+
+    old = lseek(fd, offset, SEEK_CUR);
+    if (lseek(fd, offset, SEEK_SET) == -1)
+        return -1;
+    ret = read(fd, buf, n);
+    e = errno;
+    lseek(fd, old, SEEK_CUR);
+    errno = e;
+    return ret;
+}
+
 int raise(int sig)
 {
 	return kill(getpid(), sig);
@@ -117,4 +133,15 @@ void abort(void)
 	raise(SIGABRT);
 	while (1)
 		;
+}
+
+#define errmsg(str) write(2, str, sizeof(str) - 1)
+#define errstr(str) write(2, str, strlen(str))
+
+void __assertfailed(char *str)
+{
+    errmsg("assertion \"");
+    errstr(str);
+    errmsg("\" failed\n");
+    abort();
 }
